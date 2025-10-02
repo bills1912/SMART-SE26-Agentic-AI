@@ -1,0 +1,104 @@
+import React from 'react';
+import { Card } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { PolicyRecommendation } from '../types/chat';
+import { useState } from 'react';
+
+interface PolicyCardProps {
+  policy: PolicyRecommendation;
+}
+
+const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const getPriorityIcon = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'medium':
+        return <Clock className="h-4 w-4 text-orange-500" />;
+      case 'low':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  return (
+    <Card className="p-4 bg-white border-orange-200 shadow-md hover:shadow-lg transition-all duration-200">
+      <div className="space-y-3">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              {getPriorityIcon(policy.priority)}
+              <h4 className="font-semibold text-gray-800">{policy.title}</h4>
+              <Badge className={`text-xs ${getPriorityColor(policy.priority)}`}>
+                {policy.priority.toUpperCase()} PRIORITY
+              </Badge>
+            </div>
+            <Badge variant="outline" className="text-xs mb-2">
+              {policy.category}
+            </Badge>
+          </div>
+        </div>
+
+        {/* Description */}
+        <p className="text-sm text-gray-600">{policy.description}</p>
+
+        {/* Impact */}
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+          <div className="text-xs font-medium text-orange-800 mb-1">Expected Impact</div>
+          <div className="text-sm text-orange-700">{policy.impact}</div>
+        </div>
+
+        {/* Implementation Steps */}
+        <div className="space-y-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpanded(!expanded)}
+            className="w-full justify-between text-gray-600 hover:text-red-600"
+          >
+            <span className="text-xs font-medium">Implementation Steps</span>
+            {expanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+
+          {expanded && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+              {policy.implementation.map((step, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {index + 1}
+                  </div>
+                  <div className="text-sm text-gray-700">{step}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+export default PolicyCard;
