@@ -10,9 +10,12 @@ import { toast } from '../hooks/use-toast';
 import apiService from '../services/api';
 
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [scrapingStatus, setScrapingStatus] = useState<'idle' | 'in_progress'>('idle');
+  const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
