@@ -164,10 +164,10 @@ const ChatInterface: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <Card className="bg-white/80 backdrop-blur-sm border-orange-200 shadow-xl">
+        <div className="bg-white/80 backdrop-blur-sm border-orange-200 shadow-xl rounded-xl border">
           <div className="h-[70vh] flex flex-col">
             {/* Messages */}
-            <ScrollArea className="flex-1 p-6">
+            <div className="flex-1 p-6 overflow-auto">
               <div className="space-y-4">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
@@ -185,7 +185,7 @@ const ChatInterface: React.FC = () => {
                 )}
               </div>
               <div ref={messagesEndRef} />
-            </ScrollArea>
+            </div>
 
             {/* Input Area */}
             <div className="border-t border-orange-200 p-6">
