@@ -365,18 +365,10 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Initial Load & Welcome Message"
-    - "Chat Interface Functionality"
-    - "Dynamic Visualizations"
-    - "Policy Insights & Recommendations"
-    - "Session Management"
-    - "Real-time Status Indicators"
-    - "Responsive Design & UI"
-    - "Error Handling"
+  current_focus: []
   stuck_tasks: []
-  test_all: true
-  test_priority: "high_first"
+  test_all: false
+  test_priority: "completed"
 
 agent_communication:
   - agent: "testing"
