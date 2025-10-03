@@ -1,7 +1,4 @@
 import React from 'react';
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
 import { CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { PolicyRecommendation } from '../types/chat';
 import { useState } from 'react';
