@@ -192,7 +192,7 @@ const ChatInterface: React.FC = () => {
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-orange-200 dark:border-gray-700 p-6">
+            <div className="border-t border-orange-200 dark:border-gray-700 p-4">
               <div className="flex gap-4">
                 <div className="flex-1">
                   <textarea
