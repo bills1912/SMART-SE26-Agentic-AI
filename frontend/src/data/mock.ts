@@ -166,6 +166,7 @@ export const mockInsights: string[] = [
 export const mockChatMessages: ChatMessage[] = [
   {
     id: '1',
+    session_id: 'mock_session',
     sender: 'ai',
     content: 'Hello! I\'m your AI Policy Analyst. I can help you analyze policy scenarios, generate insights, and create visualizations. What policy area would you like to explore today?',
     timestamp: new Date(Date.now() - 5 * 60 * 1000),
