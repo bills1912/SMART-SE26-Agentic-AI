@@ -140,24 +140,23 @@ const ChatInterface: React.FC = () => {
       {/* Main Content */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'} p-4`}>
         <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="mb-6 text-center relative">
-            {/* Theme Toggle - Top Right */}
-            <div className="absolute top-0 right-0">
-              <ThemeToggle />
-            </div>
-            
-            <div className="inline-flex items-center gap-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg border border-orange-200 dark:border-gray-700">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-600 rounded-xl flex items-center justify-center">
-                <Bot className="h-6 w-6 text-white" />
+          {/* Compact Header */}
+          <div className="mb-4 flex items-center justify-between">
+            {/* Left: App Title */}
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center">
+                <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
+                <h1 className="text-lg font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
                   AI Policy & Insight Generator
                 </h1>
-                <p className="text-gray-600 dark:text-gray-300 text-sm">Advanced policy analysis with interactive visualizations</p>
+                <p className="text-gray-500 dark:text-gray-400 text-xs">Real-time policy analysis</p>
               </div>
             </div>
+            
+            {/* Right: Theme Toggle */}
+            <ThemeToggle />
           </div>
 
         {/* Chat Area */}
