@@ -44,48 +44,77 @@ class PolicyAIAnalyzer:
             # Prepare detailed context from real scraped data
             context = self._prepare_detailed_data_context(scraped_data)
             
-            # Create strict data-driven analysis prompt
-            analysis_prompt = f"""
-            STRICT DATA-DRIVEN ANALYSIS REQUIRED:
-
-            USER QUESTION: {user_message}
-
-            AVAILABLE REAL DATA (ONLY USE THIS DATA):
-            {context}
-
-            REQUIREMENTS:
-            - Only analyze based on the provided real data above
-            - If specific data is not available, explicitly state data limitations
-            - Generate visualizations ONLY using actual data points from the context
-            - All insights must reference specific data from the context
-            - Do not create hypothetical scenarios or data
+            # Check if the query is analysis-related
+            is_analysis_query = self._is_analysis_related_query(user_message)
             
-            Provide response in JSON format:
-            {{
-                "main_response": "Analysis based strictly on available data (mention data limitations)",
-                "data_availability": "Available: [list data types], Missing: [list missing data]",
-                "insights": ["insight based on real data point", "another data-driven insight"],
-                "policy_recommendations": [
-                    {{
-                        "title": "Evidence-based recommendation title",
-                        "description": "Based on specific data from context",
-                        "priority": "high|medium|low", 
-                        "category": "economic|social|environmental|healthcare|education|security|technology",
-                        "impact": "Expected impact based on similar real examples from data",
-                        "implementation_steps": ["step based on real examples"],
-                        "supporting_evidence": "Specific data reference from context"
-                    }}
-                ],
-                "visualizations": [
-                    {{
-                        "type": "chart",
-                        "title": "Chart title based on real data",
-                        "data_source": "Specific data reference",
-                        "real_data_points": true
-                    }}
-                ]
-            }}
-            """
+            # Create context-aware analysis prompt
+            if is_analysis_query:
+                analysis_prompt = f"""
+                STRICT DATA-DRIVEN ANALYSIS REQUIRED:
+                Language: Respond in {user_language}
+
+                USER QUESTION: {user_message}
+
+                AVAILABLE REAL DATA (ONLY USE THIS DATA):
+                {context}
+
+                REQUIREMENTS:
+                - Only analyze based on the provided real data above
+                - If specific data is not available, explicitly state data limitations
+                - Generate visualizations ONLY using actual data points from the context
+                - All insights must reference specific data from the context
+                - Do not create hypothetical scenarios or data
+                - Respond in {user_language} language
+                
+                Provide response in JSON format:
+                {{
+                    "main_response": "Analysis based strictly on available data (mention data limitations)",
+                    "data_availability": "Available: [list data types], Missing: [list missing data]",
+                    "insights": ["insight based on real data point", "another data-driven insight"],
+                    "policy_recommendations": [
+                        {{
+                            "title": "Evidence-based recommendation title",
+                            "description": "Based on specific data from context",
+                            "priority": "high|medium|low", 
+                            "category": "economic|social|environmental|healthcare|education|security|technology",
+                            "impact": "Expected impact based on similar real examples from data",
+                            "implementation_steps": ["step based on real examples"],
+                            "supporting_evidence": "Specific data reference from context"
+                        }}
+                    ],
+                    "visualizations": [
+                        {{
+                            "type": "chart",
+                            "title": "Chart title based on real data",
+                            "data_source": "Specific data reference",
+                            "real_data_points": true
+                        }}
+                    ]
+                }}
+                """
+            else:
+                analysis_prompt = f"""
+                CONVERSATIONAL RESPONSE REQUIRED:
+                Language: Respond in {user_language}
+
+                USER QUESTION: {user_message}
+
+                This question is not related to data analysis, policy analysis, statistics, or visualization.
+                Provide a helpful conversational response without generating analysis outputs.
+
+                REQUIREMENTS:
+                - Respond conversationally and helpfully in {user_language}
+                - Do NOT generate visualizations, insights, or policy recommendations
+                - If the user asks about general topics, provide informative chat responses
+                - If the user asks how you can help, explain your policy analysis capabilities
+                - Keep the response focused and relevant to their question
+
+                Provide response in JSON format:
+                {{
+                    "main_response": "Conversational response in {user_language}",
+                    "is_analysis": false
+                }}
+                """
 
             # Get AI response
             ai_message = UserMessage(text=analysis_prompt)
