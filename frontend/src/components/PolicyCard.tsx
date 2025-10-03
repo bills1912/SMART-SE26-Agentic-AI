@@ -68,7 +68,7 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
         <div className="space-y-2">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full flex items-center justify-between text-gray-600 hover:text-red-600 hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs"
+            className="w-full flex items-center justify-between text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs"
           >
             <span className="text-xs font-medium">Implementation Steps</span>
             {expanded ? (
