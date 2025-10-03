@@ -145,7 +145,7 @@ const ChatInterface: React.FC = () => {
       <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'} p-4`}>
         <div className="max-w-6xl mx-auto">
           {/* Compact Header */}
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             {/* Left: Brand Logo */}
             <div className="flex items-center">
               <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center mr-3">
