@@ -133,27 +133,32 @@ const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 transition-colors duration-300">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 text-center relative">
-          {/* Theme Toggle - Top Right */}
-          <div className="absolute top-0 right-0">
-            <ThemeToggle />
-          </div>
-          
-          <div className="inline-flex items-center gap-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg border border-orange-200 dark:border-gray-700">
-            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-600 rounded-xl flex items-center justify-center">
-              <Bot className="h-6 w-6 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+      {/* Chat Sidebar */}
+      <ChatSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      
+      {/* Main Content */}
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'} p-4`}>
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-6 text-center relative">
+            {/* Theme Toggle - Top Right */}
+            <div className="absolute top-0 right-0">
+              <ThemeToggle />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
-                AI Policy & Insight Generator
-              </h1>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">Advanced policy analysis with interactive visualizations</p>
+            
+            <div className="inline-flex items-center gap-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg border border-orange-200 dark:border-gray-700">
+              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-600 rounded-xl flex items-center justify-center">
+                <Bot className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
+                  AI Policy & Insight Generator
+                </h1>
+                <p className="text-gray-600 dark:text-gray-300 text-sm">Advanced policy analysis with interactive visualizations</p>
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Chat Area */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-orange-200 dark:border-gray-700 shadow-xl rounded-xl border">
