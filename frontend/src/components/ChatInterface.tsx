@@ -223,24 +223,22 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Bar */}
-        <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-300">
-          <div className="flex items-center justify-center gap-4">
-            <span>AI-powered policy analysis</span>
-            <span>•</span>
-            <span>Real-time visualizations</span>
-            <span>•</span>
+        {/* Compact Status Bar */}
+        <div className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center justify-center gap-3">
             <div className="flex items-center gap-1">
-              <Database className="h-3 w-3" />
-              <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-300' : 'text-gray-500 dark:text-gray-300'}>
+              <Database className="h-2.5 w-2.5" />
+              <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
                 {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
               </span>
             </div>
             <span>•</span>
-            <div className={`w-2 h-2 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className={isBackendAvailable ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'}>
-              {isBackendAvailable ? 'Connected' : 'Offline'}
-            </span>
+            <div className="flex items-center gap-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                {isBackendAvailable ? 'Connected' : 'Offline'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
