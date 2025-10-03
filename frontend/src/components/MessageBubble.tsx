@@ -35,7 +35,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       {/* Message Content */}
       <div className={`flex-1 max-w-4xl ${isAI ? '' : 'flex flex-col items-end'}`}>
         {/* Main Message */}
-        <Card className={`p-4 ${
+        <div className={`p-4 rounded-xl border ${
           isAI 
             ? 'bg-white border-orange-200 shadow-md' 
             : 'bg-gradient-to-r from-red-500 to-orange-600 text-white border-none shadow-lg'
@@ -46,7 +46,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           <div className={`text-xs mt-2 ${isAI ? 'text-gray-500' : 'text-red-100'}`}>
             {formatTime(message.timestamp)}
           </div>
-        </Card>
+        </div>
 
         {/* Visualizations */}
         {message.visualizations && message.visualizations.length > 0 && (
