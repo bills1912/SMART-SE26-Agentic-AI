@@ -119,23 +119,64 @@ class PolicyAIAnalyzer:
             logger.error(f"Error in policy analysis: {e}")
             return await self._handle_error_scenario(user_message, str(e))
 
-    async def _handle_no_data_scenario(self, user_message: str) -> Dict[str, Any]:
+    async def _handle_no_data_scenario(self, user_message: str, user_language: str = "English") -> Dict[str, Any]:
         """Handle cases where no real data is available"""
-        return {
-            'message': f"""I cannot provide a comprehensive analysis for your question about "{user_message}" because no relevant real-time data is currently available in the system. 
+        
+        # Multilingual responses based on detected language
+        responses = {
+            "Spanish": {
+                'message': f"""No puedo proporcionar un análisis completo para su pregunta sobre "{user_message}" porque actualmente no hay datos relevantes en tiempo real disponibles en el sistema.
 
-To provide accurate policy analysis, I need access to current economic indicators, policy outcome data, and relevant research findings. 
+Para proporcionar un análisis de políticas preciso, necesito acceso a indicadores económicos actuales, datos de resultados de políticas y hallazgos de investigación relevantes.
+
+¿Le gustaría que:
+1. Sugiera qué fuentes de datos específicas serían útiles para este análisis
+2. Proporcione principios generales de análisis de políticas que se aplican a esta área
+3. Espere mientras el sistema intenta recopilar más datos relevantes""",
+                'insights': [
+                    'El análisis de políticas requiere acceso a datos actuales e históricos',
+                    'Un análisis efectivo necesita múltiples fuentes de datos para validación',
+                    'La disponibilidad de datos impacta directamente la calidad y confiabilidad del análisis'
+                ]
+            },
+            "French": {
+                'message': f"""Je ne peux pas fournir une analyse complète de votre question sur "{user_message}" car aucune donnée pertinente en temps réel n'est actuellement disponible dans le système.
+
+Pour fournir une analyse politique précise, j'ai besoin d'accès aux indicateurs économiques actuels, aux données de résultats politiques et aux résultats de recherche pertinents.
+
+Souhaitez-vous que je:
+1. Suggère quelles sources de données spécifiques seraient utiles pour cette analyse
+2. Fournisse des principes généraux d'analyse politique qui s'appliquent à ce domaine
+3. Attende pendant que le système tente de rassembler plus de données pertinentes""",
+                'insights': [
+                    'L\'analyse politique nécessite l\'accès aux données actuelles et historiques',
+                    'Une analyse efficace nécessite plusieurs sources de données pour la validation',
+                    'La disponibilité des données impacte directement la qualité et la fiabilité de l\'analyse'
+                ]
+            },
+            "English": {
+                'message': f"""I cannot provide a comprehensive analysis for your question about "{user_message}" because no relevant real-time data is currently available in the system.
+
+To provide accurate policy analysis, I need access to current economic indicators, policy outcome data, and relevant research findings.
 
 Would you like me to:
 1. Suggest what specific data sources would be helpful for this analysis
 2. Provide general policy analysis principles that apply to this area
 3. Wait while the system attempts to gather more relevant data""",
+                'insights': [
+                    'Policy analysis requires access to current and historical data',
+                    'Effective analysis needs multiple data sources for validation',
+                    'Data availability directly impacts analysis quality and reliability'
+                ]
+            }
+        }
+        
+        response = responses.get(user_language, responses["English"])
+        
+        return {
+            'message': response['message'],
             'data_availability': 'No relevant data currently available',
-            'insights': [
-                'Policy analysis requires access to current and historical data',
-                'Effective analysis needs multiple data sources for validation',
-                'Data availability directly impacts analysis quality and reliability'
-            ],
+            'insights': response['insights'],
             'policies': [],
             'visualizations': [],
             'supporting_data_count': 0
