@@ -149,12 +149,19 @@ Would you like me to:
             'supporting_data_count': 0
         }
 
-    def _get_data_driven_analyst_prompt(self) -> str:
+    def _get_data_driven_analyst_prompt(self, user_language: str = "English") -> str:
         """System prompt for strictly data-driven policy analysis AI"""
-        return """
-        You are a DATA-DRIVEN policy analyst who ONLY analyzes based on provided real data.
+        return f"""
+        You are a DATA-DRIVEN multilingual policy analyst who ONLY analyzes based on provided real data.
         
-        STRICT REQUIREMENTS:
+        LANGUAGE REQUIREMENT:
+        - ALWAYS respond in the same language as the user's input: {user_language}
+        - If the user writes in Spanish, respond in Spanish
+        - If the user writes in French, respond in French
+        - If the user writes in Chinese, respond in Chinese
+        - Maintain professional policy analysis terminology in the target language
+        
+        STRICT DATA REQUIREMENTS:
         - Only use data explicitly provided in the context
         - Never generate hypothetical numbers or scenarios
         - If specific data is missing, clearly state this limitation
@@ -174,9 +181,48 @@ Would you like me to:
         3. Acknowledge when analysis is limited by data availability
         4. Never extrapolate beyond available data
         5. Provide specific data references for each insight
+        6. Respond in {user_language} language throughout
         
         You are honest about limitations rather than providing speculative analysis.
         """
+
+    def _detect_language(self, text: str) -> str:
+        """Detect the language of user input"""
+        # Simple language detection based on common words and patterns
+        text_lower = text.lower()
+        
+        # Spanish indicators
+        spanish_words = ['que', 'del', 'los', 'las', 'una', 'para', 'con', 'por', 'como', 'cual', 'donde', 'cuando', 'porque', 'economia', 'politica', 'datos']
+        if any(word in text_lower for word in spanish_words):
+            return "Spanish"
+        
+        # French indicators
+        french_words = ['que', 'des', 'les', 'une', 'pour', 'avec', 'par', 'comme', 'quel', 'ou', 'quand', 'pourquoi', 'économie', 'politique', 'données']
+        if any(word in text_lower for word in french_words):
+            return "French"
+        
+        # German indicators
+        german_words = ['das', 'der', 'die', 'und', 'mit', 'für', 'von', 'wie', 'wo', 'wann', 'warum', 'wirtschaft', 'politik', 'daten']
+        if any(word in text_lower for word in german_words):
+            return "German"
+        
+        # Italian indicators
+        italian_words = ['che', 'del', 'gli', 'una', 'per', 'con', 'come', 'dove', 'quando', 'perché', 'economia', 'politica', 'dati']
+        if any(word in text_lower for word in italian_words):
+            return "Italian"
+        
+        # Portuguese indicators
+        portuguese_words = ['que', 'dos', 'uma', 'para', 'com', 'por', 'como', 'onde', 'quando', 'porque', 'economia', 'política', 'dados']
+        if any(word in text_lower for word in portuguese_words):
+            return "Portuguese"
+        
+        # Chinese indicators (simplified)
+        chinese_chars = ['的', '和', '在', '是', '有', '了', '不', '经济', '政策', '数据']
+        if any(char in text for char in chinese_chars):
+            return "Chinese"
+        
+        # Default to English
+        return "English"
 
     def _prepare_detailed_data_context(self, scraped_data: List[ScrapedData]) -> str:
         """Prepare detailed, structured data context for AI analysis"""
