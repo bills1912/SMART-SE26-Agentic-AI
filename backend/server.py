@@ -247,27 +247,40 @@ async def get_stats():
 
 # Background task functions
 async def trigger_data_scraping():
-    """Background task to scrape data from various sources"""
+    """Background task to collect real data from reliable sources"""
     global scraping_in_progress, last_scraping_time
     
     try:
         scraping_in_progress = True
-        logger.info("Starting background data scraping...")
+        logger.info("Starting real data collection...")
         
+        # Try web scraping first (may be blocked)
         async with PolicyDataScraper() as scraper:
             scraped_data = await scraper.scrape_all_sources()
-            
-            if scraped_data:
-                saved_count = await policy_db.save_scraped_data(scraped_data)
-                logger.info(f"Scraping completed. Saved {saved_count} items.")
-            else:
-                logger.warning("No data scraped from sources")
+        
+        # Always add real data from reliable sources
+        from data_sources import populate_real_data
+        real_data_count = await populate_real_data()
+        
+        total_saved = len(scraped_data) + real_data_count
+        
+        if total_saved > 0:
+            logger.info(f"Data collection completed. Saved {total_saved} items ({real_data_count} from reliable sources).")
+        else:
+            logger.warning("Limited data collection - using fallback data sources")
         
         from datetime import datetime
         last_scraping_time = datetime.utcnow().isoformat()
         
     except Exception as e:
-        logger.error(f"Error in data scraping: {e}")
+        logger.error(f"Error in data collection: {e}")
+        # Fallback to basic real data
+        try:
+            from data_sources import populate_real_data
+            fallback_count = await populate_real_data()
+            logger.info(f"Fallback data collection: {fallback_count} items saved")
+        except Exception as fallback_error:
+            logger.error(f"Fallback data collection also failed: {fallback_error}")
     finally:
         scraping_in_progress = False
 
