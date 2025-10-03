@@ -357,3 +357,5 @@ test_plan:
 agent_communication:
   - agent: "testing"
     message: "Comprehensive backend testing completed successfully. All 12 test scenarios passed (100% success rate). Core functionality working: API endpoints, AI integration with real Emergent LLM, MongoDB operations, session management, web scraping infrastructure, visualization generation, and error handling. Minor issue: External websites block scraping (expected), but all backend systems are fully functional. System ready for production use."
+  - agent: "testing"
+    message: "Starting comprehensive frontend testing for AI Policy & Insight Generator. Will test all 8 frontend components including chat interface, visualizations, policy cards, session management, and real-time status indicators. Backend is confirmed working, so focusing on UI/UX and frontend-backend integration."
