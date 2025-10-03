@@ -152,12 +152,15 @@ export const mockPolicyRecommendations: PolicyRecommendation[] = [
     priority: 'medium',
     category: 'Social Policy',
     impact: 'Significant improvement in public health outcomes',
-    implementation: [
+    implementation_steps: [
       'Expand community health centers',
       'Implement telemedicine infrastructure',
       'Reduce prescription drug costs',
       'Increase healthcare workforce training'
-    ]
+    ],
+    supporting_insights: [],
+    supporting_data_ids: [],
+    created_at: new Date().toISOString()
   }
 ];
 
