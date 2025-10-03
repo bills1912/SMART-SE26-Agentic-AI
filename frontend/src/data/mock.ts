@@ -118,12 +118,15 @@ export const mockPolicyRecommendations: PolicyRecommendation[] = [
     priority: 'high',
     category: 'Economic Policy',
     impact: 'High potential for job creation and productivity gains',
-    implementation: [
+    implementation_steps: [
       'Allocate $2B over 3 years for broadband expansion',
       'Establish public-private partnerships for 5G deployment',
       'Create digital skills training programs',
       'Implement regulatory framework for digital services'
-    ]
+    ],
+    supporting_insights: [],
+    supporting_data_ids: [],
+    created_at: new Date().toISOString()
   },
   {
     id: '2',
