@@ -138,6 +138,9 @@ const ChatInterface: React.FC = () => {
       {/* Chat Sidebar */}
       <ChatSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       
+      {/* Sidebar Toggle Button */}
+      <SidebarToggle isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      
       {/* Main Content */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'} p-4`}>
         <div className="max-w-6xl mx-auto">
