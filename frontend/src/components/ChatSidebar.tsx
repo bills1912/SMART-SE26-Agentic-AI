@@ -103,7 +103,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
                       exportAllChats();
                       setShowExportMenu(false);
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-gray-600 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2 border-t border-gray-200 dark:border-gray-600"
+                    className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-gray-600 text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2 border-t border-gray-200 dark:border-gray-600"
                   >
                     <Download className="h-4 w-4" />
                     All Chats
