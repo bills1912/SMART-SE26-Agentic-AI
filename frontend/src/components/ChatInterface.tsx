@@ -202,17 +202,17 @@ const ChatInterface: React.FC = () => {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Button
+                  <button
                     onClick={handleSendMessage}
                     disabled={!inputMessage.trim() || isLoading}
-                    className="h-full bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white shadow-lg transform transition-all duration-200 hover:scale-105"
+                    className="h-full px-4 py-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white shadow-lg transform transition-all duration-200 hover:scale-105 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
                       <Send className="h-5 w-5" />
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>
