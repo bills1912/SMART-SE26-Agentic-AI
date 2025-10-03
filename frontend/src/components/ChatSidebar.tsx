@@ -7,12 +7,12 @@ import {
   Calendar,
   FileText,
   ChevronLeft,
-  ChevronRight,
   Trash2,
   MoreHorizontal
 } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import { format } from 'date-fns';
+import BrandLogo from './BrandLogo';
 
 interface ChatSidebarProps {
   isOpen: boolean;
