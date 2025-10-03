@@ -65,30 +65,72 @@ const ChatInterface: React.FC = () => {
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
+      session_id: currentSessionId || 'temp',
       sender: 'user',
       content: inputMessage.trim(),
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const originalMessage = inputMessage.trim();
     setInputMessage('');
     setIsLoading(true);
 
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (!isBackendAvailable) {
+        throw new Error('Backend service is currently unavailable');
+      }
+
+      // Call real API
+      const response = await apiService.sendMessage(originalMessage, currentSessionId);
       
-      const aiResponse = generateMockResponse(inputMessage);
+      // Update session ID if this is a new conversation
+      if (!currentSessionId) {
+        setCurrentSessionId(response.session_id);
+      }
+      
+      // Create AI response message
+      const aiResponse: ChatMessage = {
+        id: response.session_id + '_' + Date.now(),
+        session_id: response.session_id,
+        sender: 'ai',
+        content: response.message,
+        timestamp: new Date(),
+        visualizations: response.visualizations || [],
+        insights: response.insights || [],
+        policies: response.policies || [],
+      };
+      
       setMessages(prev => [...prev, aiResponse]);
       
       toast({
         title: "Analysis Complete",
-        description: "AI policy analysis generated successfully.",
+        description: `AI policy analysis generated successfully. ${response.supporting_data_count > 0 ? `Used ${response.supporting_data_count} data sources.` : ''}`,
       });
-    } catch (error) {
+
+      // Update scraping status
+      const health = await apiService.getHealth();
+      setScrapingStatus(health.scraping_status);
+      
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      
+      // Fallback response for errors
+      const errorResponse: ChatMessage = {
+        id: 'error_' + Date.now(),
+        session_id: currentSessionId || 'temp',
+        sender: 'ai',
+        content: 'I apologize, but I encountered an issue while analyzing your policy question. This could be due to high demand or temporary service issues. Please try again in a moment.',
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, errorResponse]);
+      
       toast({
-        title: "Error",
-        description: "Failed to generate analysis. Please try again.",
+        title: "Connection Error",
+        description: isBackendAvailable 
+          ? "Failed to analyze policy. Please try again." 
+          : "AI service is temporarily unavailable. Please check your connection.",
         variant: "destructive",
       });
     } finally {
