@@ -107,7 +107,8 @@ export const mockVisualizations: VisualizationData[] = [
         }
       ]
     },
-    data: {}
+    data: {},
+    created_at: new Date().toISOString()
   }
 ];
 
