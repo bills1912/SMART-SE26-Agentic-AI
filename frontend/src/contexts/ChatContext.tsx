@@ -140,9 +140,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         sender: msg.sender,
         content: msg.content,
         timestamp: new Date(msg.timestamp).toLocaleString(),
-        hasVisualizations: msg.visualizations?.length > 0,
-        hasInsights: msg.insights?.length > 0,
-        hasPolicies: msg.policies?.length > 0
+        hasVisualizations: (msg.visualizations?.length || 0) > 0,
+        hasInsights: (msg.insights?.length || 0) > 0,
+        hasPolicies: (msg.policies?.length || 0) > 0
       }))
     };
 
