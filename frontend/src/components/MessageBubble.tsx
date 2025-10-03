@@ -1,5 +1,4 @@
 import React from 'react';
-import { Card } from './ui/card';
 import { Bot, User, TrendingUp, FileText, Lightbulb } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
 import VisualizationComponent from './VisualizationComponent';
