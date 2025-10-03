@@ -201,7 +201,7 @@ const ChatInterface: React.FC = () => {
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Describe your policy scenario or ask for analysis..."
-                    className="min-h-[80px] w-full resize-none border border-orange-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 rounded-md p-3 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 focus:outline-none"
+                    className="min-h-[60px] w-full resize-none border border-orange-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 rounded-md p-3 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 focus:outline-none"
                     disabled={isLoading}
                   />
                 </div>
