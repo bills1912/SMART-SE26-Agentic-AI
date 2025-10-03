@@ -36,13 +36,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         {/* Main Message */}
         <div className={`p-4 rounded-xl border ${
           isAI 
-            ? 'bg-white border-orange-200 shadow-md' 
+            ? 'bg-white dark:bg-gray-700 border-orange-200 dark:border-gray-600 shadow-md' 
             : 'bg-gradient-to-r from-red-500 to-orange-600 text-white border-none shadow-lg'
         }`}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+          <div className={`whitespace-pre-wrap text-sm leading-relaxed ${isAI ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>
             {message.content}
           </div>
-          <div className={`text-xs mt-2 ${isAI ? 'text-gray-500' : 'text-red-100'}`}>
+          <div className={`text-xs mt-2 ${isAI ? 'text-gray-500 dark:text-gray-400' : 'text-red-100'}`}>
             {formatTime(message.timestamp)}
           </div>
         </div>
