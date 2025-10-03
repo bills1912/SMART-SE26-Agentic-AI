@@ -297,6 +297,67 @@ Would you like me to:
         # Default to English
         return "English"
 
+    def _is_analysis_related_query(self, user_message: str) -> bool:
+        """Determine if the user query is related to analysis, data, policy, etc."""
+        message_lower = user_message.lower()
+        
+        # Analysis-related keywords
+        analysis_keywords = [
+            # English
+            'analyze', 'analysis', 'compare', 'comparison', 'data', 'statistics', 'chart', 'graph', 
+            'visualization', 'policy', 'economic', 'gdp', 'growth', 'inflation', 'unemployment',
+            'impact', 'effect', 'trend', 'insight', 'recommendation', 'study', 'research',
+            'evaluate', 'assessment', 'measure', 'metric', 'indicator', 'performance',
+            'forecast', 'prediction', 'model', 'correlation', 'pattern', 'distribution',
+            
+            # Spanish
+            'analizar', 'análisis', 'comparar', 'comparación', 'datos', 'estadísticas',
+            'gráfico', 'visualización', 'política', 'económico', 'crecimiento', 'inflación',
+            'desempleo', 'impacto', 'efecto', 'tendencia', 'recomendación', 'estudio',
+            
+            # French  
+            'analyser', 'analyse', 'comparer', 'comparaison', 'données', 'statistiques',
+            'graphique', 'visualisation', 'politique', 'économique', 'croissance', 'inflation',
+            'chômage', 'impact', 'effet', 'tendance', 'recommandation', 'étude',
+            
+            # German
+            'analysieren', 'analyse', 'vergleichen', 'vergleich', 'daten', 'statistiken',
+            'grafik', 'visualisierung', 'politik', 'wirtschaft', 'wachstum', 'inflation',
+            'arbeitslosigkeit', 'auswirkung', 'effekt', 'trend', 'empfehlung', 'studie'
+        ]
+        
+        # Non-analysis keywords (general chat)
+        chat_keywords = [
+            'hello', 'hi', 'how are you', 'what is your name', 'who are you',
+            'thank you', 'thanks', 'goodbye', 'bye', 'help', 'what can you do',
+            'how do you work', 'tell me about', 'explain', 'define', 'meaning',
+            'weather', 'time', 'date', 'joke', 'story', 'news', 'latest',
+            'hola', 'gracias', 'adiós', 'ayuda', 'qué puedes hacer',
+            'bonjour', 'merci', 'au revoir', 'aide', 'que peux-tu faire',
+            'hallo', 'danke', 'auf wiedersehen', 'hilfe', 'was kannst du'
+        ]
+        
+        # Check for analysis keywords
+        analysis_score = sum(1 for keyword in analysis_keywords if keyword in message_lower)
+        
+        # Check for chat-only keywords
+        chat_score = sum(1 for keyword in chat_keywords if keyword in message_lower)
+        
+        # If there are analysis keywords and no pure chat keywords, it's analysis
+        if analysis_score > 0 and chat_score == 0:
+            return True
+            
+        # If there are more analysis keywords than chat keywords
+        if analysis_score > chat_score:
+            return True
+            
+        # If asking specifically about capabilities or help
+        if any(phrase in message_lower for phrase in ['what can you', 'how can you help', 'what do you do', 'capabilities']):
+            return False  # This is a general question, not analysis
+            
+        # Default: if uncertain and contains some analysis terms, treat as analysis
+        return analysis_score > 0
+
     def _prepare_detailed_data_context(self, scraped_data: List[ScrapedData]) -> str:
         """Prepare detailed, structured data context for AI analysis"""
         if not scraped_data:
