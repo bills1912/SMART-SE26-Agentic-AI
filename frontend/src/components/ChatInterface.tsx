@@ -217,7 +217,7 @@ const ChatInterface: React.FC = () => {
               </div>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Status Bar */}
         <div className="mt-4 text-center text-sm text-gray-500">
