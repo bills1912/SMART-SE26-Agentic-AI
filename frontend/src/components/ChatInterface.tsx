@@ -159,9 +159,9 @@ const ChatInterface: React.FC = () => {
             <ThemeToggle />
           </div>
 
-        {/* Chat Area */}
+        {/* Chat Area - Now Wider */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-orange-200 dark:border-gray-700 shadow-xl rounded-xl border">
-          <div className="h-[70vh] flex flex-col">
+          <div className="h-[80vh] flex flex-col">
             {/* Messages */}
             <div className="flex-1 p-6 overflow-auto">
               <div className="space-y-4">
