@@ -123,26 +123,38 @@ class PolicyAIAnalyzer:
             # Parse AI response
             parsed_response = self._parse_ai_response(response)
             
-            # Generate data-driven visualizations
-            visualizations = await self._generate_data_driven_visualizations(
-                scraped_data, 
-                user_message,
-                parsed_response.get('visualizations', [])
-            )
-            
-            # Create evidence-based policy recommendations
-            recommendations = self._create_evidence_based_recommendations(
-                parsed_response.get('policy_recommendations', [])
-            )
-            
-            return {
-                'message': parsed_response.get('main_response', response),
-                'data_availability': parsed_response.get('data_availability', 'Limited data available'),
-                'insights': parsed_response.get('insights', []),
-                'policies': recommendations,
-                'visualizations': visualizations,
-                'supporting_data_count': len(scraped_data)
-            }
+            # Check if this is an analysis query
+            if is_analysis_query and parsed_response.get('is_analysis', True):
+                # Generate data-driven visualizations
+                visualizations = await self._generate_data_driven_visualizations(
+                    scraped_data, 
+                    user_message,
+                    parsed_response.get('visualizations', [])
+                )
+                
+                # Create evidence-based policy recommendations
+                recommendations = self._create_evidence_based_recommendations(
+                    parsed_response.get('policy_recommendations', [])
+                )
+                
+                return {
+                    'message': parsed_response.get('main_response', response),
+                    'data_availability': parsed_response.get('data_availability', 'Limited data available'),
+                    'insights': parsed_response.get('insights', []),
+                    'policies': recommendations,
+                    'visualizations': visualizations,
+                    'supporting_data_count': len(scraped_data)
+                }
+            else:
+                # For non-analysis queries, return only chat response
+                return {
+                    'message': parsed_response.get('main_response', response),
+                    'data_availability': 'Not applicable for general conversation',
+                    'insights': [],
+                    'policies': [],
+                    'visualizations': [],
+                    'supporting_data_count': 0
+                }
             
         except Exception as e:
             logger.error(f"Error in policy analysis: {e}")
