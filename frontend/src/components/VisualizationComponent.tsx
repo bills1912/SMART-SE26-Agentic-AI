@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Card } from './ui/card';
+import { Card } from './ui/card.jsx';
 import { VisualizationData } from '../types/chat';
 
 interface VisualizationComponentProps {
