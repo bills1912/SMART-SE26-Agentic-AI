@@ -53,17 +53,22 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
         
         {/* Header */}
         <div className="p-4 border-b border-orange-200 dark:border-gray-700">
+          {/* Brand Section */}
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-              <History className="h-5 w-5 text-orange-600" />
-              Chat History
-            </h2>
+            <BrandLogo size="lg" showText={true} />
             <button
               onClick={onToggle}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+              aria-label="Close sidebar"
             >
               <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>
+          </div>
+          
+          {/* Chat History Title */}
+          <div className="flex items-center gap-2 mb-4">
+            <History className="h-4 w-4 text-orange-600" />
+            <h2 className="text-base font-medium text-gray-800 dark:text-white">Chat History</h2>
           </div>
 
           {/* Action Buttons */}
