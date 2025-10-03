@@ -178,28 +178,236 @@ Would you like me to:
         You are honest about limitations rather than providing speculative analysis.
         """
 
-    def _prepare_data_context(self, scraped_data: List[ScrapedData]) -> str:
-        """Prepare scraped data context for AI analysis"""
+    def _prepare_detailed_data_context(self, scraped_data: List[ScrapedData]) -> str:
+        """Prepare detailed, structured data context for AI analysis"""
         if not scraped_data:
-            return "No recent data available for analysis."
+            return "No data available for analysis."
         
-        context_parts = []
+        context_parts = ["AVAILABLE REAL DATA:\n"]
         
-        # Group by category
+        # Group by category and source
         by_category = {}
-        for data in scraped_data[:50]:  # Limit to prevent token overflow
+        for data in scraped_data:
             category = data.category or 'general'
             if category not in by_category:
                 by_category[category] = []
             by_category[category].append(data)
         
-        # Create context summary
+        # Create detailed context with all data points
         for category, items in by_category.items():
             context_parts.append(f"\n{category.upper()} DATA:")
-            for item in items[:5]:  # Limit items per category
-                context_parts.append(f"- {item.title}: {item.content[:200]}...")
+            
+            for i, item in enumerate(items[:10]):  # Limit per category
+                context_parts.append(f"\n[{category}_{i+1}] {item.title}")
+                context_parts.append(f"Source: {item.source.value}")
+                context_parts.append(f"Content: {item.content}")
+                
+                # Include structured metadata if available
+                if item.metadata:
+                    context_parts.append("Metadata:")
+                    for key, value in item.metadata.items():
+                        context_parts.append(f"  - {key}: {value}")
+                
+                context_parts.append(f"Scraped: {item.scraped_at}\n")
+        
+        context_parts.append(f"\nTOTAL DATA POINTS: {len(scraped_data)}")
+        context_parts.append(f"DATA SOURCES: {', '.join(set([d.source.value for d in scraped_data]))}")
         
         return "\n".join(context_parts)
+
+    async def _generate_data_driven_visualizations(
+        self, 
+        scraped_data: List[ScrapedData],
+        query: str,
+        viz_requests: List[Dict]
+    ) -> List[VisualizationConfig]:
+        """Generate visualizations using only real data points"""
+        visualizations = []
+        
+        # Extract data points that can be visualized
+        economic_data = []
+        for data in scraped_data:
+            if data.category == PolicyCategory.ECONOMIC and data.metadata:
+                if 'data_points' in data.metadata:
+                    economic_data.extend(data.metadata['data_points'])
+                elif any(key in data.metadata for key in ['gdp_growth', 'investment_amount', 'jobs_created']):
+                    economic_data.append(data.metadata)
+        
+        if economic_data:
+            # Create real data visualization
+            viz_config = self._create_real_data_chart(economic_data, query)
+            if viz_config:
+                visualizations.append(viz_config)
+        else:
+            # Create a simple data availability chart
+            availability_chart = self._create_data_availability_chart(scraped_data)
+            visualizations.append(availability_chart)
+        
+        return visualizations
+
+    def _create_real_data_chart(self, data_points: List[Dict], query: str) -> Optional[VisualizationConfig]:
+        """Create chart using actual data points"""
+        try:
+            # Organize data by year if available
+            yearly_data = {}
+            categories = set()
+            
+            for point in data_points[:20]:  # Limit data points
+                if 'year' in point and 'value' in point:
+                    year = str(point['year'])
+                    if year not in yearly_data:
+                        yearly_data[year] = {}
+                    
+                    country = point.get('country', 'Data')
+                    categories.add(country)
+                    yearly_data[year][country] = point['value']
+            
+            if yearly_data:
+                years = sorted(yearly_data.keys())
+                categories = sorted(list(categories))
+                
+                series_data = []
+                colors = ['#e74c3c', '#ff6b35', '#ff8c42', '#ffad73']
+                
+                for i, category in enumerate(categories):
+                    values = []
+                    for year in years:
+                        values.append(yearly_data[year].get(category, None))
+                    
+                    series_data.append({
+                        "name": category,
+                        "type": "line",
+                        "data": values,
+                        "itemStyle": {"color": colors[i % len(colors)]}
+                    })
+                
+                config = {
+                    "title": {
+                        "text": f"Real Economic Data Analysis",
+                        "subtext": f"Based on {len(data_points)} actual data points",
+                        "left": "center",
+                        "textStyle": {"color": "#e74c3c", "fontSize": 16}
+                    },
+                    "tooltip": {"trigger": "axis"},
+                    "legend": {
+                        "data": categories,
+                        "bottom": 10,
+                        "textStyle": {"color": "#333"}
+                    },
+                    "xAxis": {
+                        "type": "category",
+                        "data": years,
+                        "axisLabel": {"color": "#666"}
+                    },
+                    "yAxis": {
+                        "type": "value",
+                        "axisLabel": {"color": "#666", "formatter": "{value}%"}
+                    },
+                    "series": series_data
+                }
+                
+                return VisualizationConfig(
+                    id=f"real_data_{int(datetime.utcnow().timestamp())}",
+                    type="chart",
+                    title="Real Economic Data Analysis",
+                    config=config,
+                    data={"source": "Real data points", "count": len(data_points)}
+                )
+                
+        except Exception as e:
+            logger.error(f"Error creating real data chart: {e}")
+        
+        return None
+
+    def _create_data_availability_chart(self, scraped_data: List[ScrapedData]) -> VisualizationConfig:
+        """Create chart showing what data is actually available"""
+        
+        # Count data by category and source
+        category_counts = {}
+        source_counts = {}
+        
+        for data in scraped_data:
+            cat = data.category.value if data.category else 'unknown'
+            src = data.source.value if data.source else 'unknown'
+            
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+            source_counts[src] = source_counts.get(src, 0) + 1
+        
+        # Create pie chart of available data
+        pie_data = []
+        colors = ['#e74c3c', '#ff6b35', '#ff8c42', '#ffad73', '#ffd4a3']
+        
+        for i, (category, count) in enumerate(category_counts.items()):
+            pie_data.append({
+                "value": count,
+                "name": f"{category.title()} ({count} items)",
+                "itemStyle": {"color": colors[i % len(colors)]}
+            })
+        
+        config = {
+            "title": {
+                "text": "Available Data Sources",
+                "subtext": f"Total: {len(scraped_data)} data points",
+                "left": "center",
+                "textStyle": {"color": "#e74c3c", "fontSize": 16}
+            },
+            "tooltip": {
+                "trigger": "item",
+                "formatter": "{a} <br/>{b}: {c} ({d}%)"
+            },
+            "series": [{
+                "name": "Data Availability",
+                "type": "pie",
+                "radius": "50%",
+                "data": pie_data,
+                "emphasis": {
+                    "itemStyle": {
+                        "shadowBlur": 10,
+                        "shadowOffsetX": 0,
+                        "shadowColor": "rgba(0, 0, 0, 0.5)"
+                    }
+                }
+            }]
+        }
+        
+        return VisualizationConfig(
+            id=f"data_availability_{int(datetime.utcnow().timestamp())}",
+            type="chart", 
+            title="Available Data Sources",
+            config=config,
+            data={"categories": category_counts, "sources": source_counts}
+        )
+
+    def _create_evidence_based_recommendations(
+        self, 
+        recommendations_data: List[Dict]
+    ) -> List[PolicyRecommendation]:
+        """Create policy recommendations that reference real evidence"""
+        recommendations = []
+        
+        for rec_data in recommendations_data:
+            try:
+                category_str = rec_data.get('category', 'economic').lower()
+                category = PolicyCategory(category_str) if category_str in PolicyCategory.__members__.values() else PolicyCategory.ECONOMIC
+                
+                # Ensure supporting evidence is included
+                supporting_evidence = rec_data.get('supporting_evidence', 'Based on available data analysis')
+                
+                recommendation = PolicyRecommendation(
+                    title=rec_data.get('title', 'Evidence-Based Policy Recommendation'),
+                    description=f"{rec_data.get('description', '')} | Evidence: {supporting_evidence}",
+                    priority=rec_data.get('priority', 'medium'),
+                    category=category,
+                    impact=rec_data.get('impact', 'Impact assessment requires more specific data'),
+                    implementation_steps=rec_data.get('implementation_steps', ['Gather more specific implementation data']),
+                    supporting_insights=[supporting_evidence]
+                )
+                recommendations.append(recommendation)
+                
+            except Exception as e:
+                logger.error(f"Error creating evidence-based recommendation: {e}")
+        
+        return recommendations
 
     def _parse_ai_response(self, response: str) -> Dict[str, Any]:
         """Parse AI JSON response safely"""
