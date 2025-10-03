@@ -174,7 +174,7 @@ const ChatInterface: React.FC = () => {
                     <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
                       <Bot className="h-4 w-4 text-white" />
                     </div>
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-200">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span>
                         {scrapingStatus === 'in_progress' 
