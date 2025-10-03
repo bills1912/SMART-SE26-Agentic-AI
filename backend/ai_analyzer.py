@@ -25,47 +25,60 @@ class PolicyAIAnalyzer:
         session_id: str,
         scraped_data: List[ScrapedData] = None
     ) -> Dict[str, Any]:
-        """Comprehensive policy analysis using AI"""
+        """Data-driven policy analysis using AI - only use available real data"""
         try:
+            # Check if we have actual data
+            if not scraped_data or len(scraped_data) == 0:
+                return await self._handle_no_data_scenario(user_message)
+            
             # Initialize AI chat
             chat = LlmChat(
                 api_key=self.api_key,
                 session_id=session_id,
-                system_message=self._get_policy_analyst_prompt()
+                system_message=self._get_data_driven_analyst_prompt()
             ).with_model("openai", "gpt-4o-mini")
 
-            # Prepare context from scraped data
-            context = self._prepare_data_context(scraped_data) if scraped_data else ""
+            # Prepare detailed context from real scraped data
+            context = self._prepare_detailed_data_context(scraped_data)
             
-            # Create analysis prompt
+            # Create strict data-driven analysis prompt
             analysis_prompt = f"""
-            Analyze the following policy question and provide comprehensive insights:
+            STRICT DATA-DRIVEN ANALYSIS REQUIRED:
 
             USER QUESTION: {user_message}
 
-            AVAILABLE DATA CONTEXT:
+            AVAILABLE REAL DATA (ONLY USE THIS DATA):
             {context}
 
-            Please provide your response in the following JSON structure:
+            REQUIREMENTS:
+            - Only analyze based on the provided real data above
+            - If specific data is not available, explicitly state data limitations
+            - Generate visualizations ONLY using actual data points from the context
+            - All insights must reference specific data from the context
+            - Do not create hypothetical scenarios or data
+            
+            Provide response in JSON format:
             {{
-                "main_response": "Your main analysis response",
-                "insights": ["insight 1", "insight 2", "insight 3"],
+                "main_response": "Analysis based strictly on available data (mention data limitations)",
+                "data_availability": "Available: [list data types], Missing: [list missing data]",
+                "insights": ["insight based on real data point", "another data-driven insight"],
                 "policy_recommendations": [
                     {{
-                        "title": "Recommendation Title",
-                        "description": "Description",
-                        "priority": "high|medium|low",
+                        "title": "Evidence-based recommendation title",
+                        "description": "Based on specific data from context",
+                        "priority": "high|medium|low", 
                         "category": "economic|social|environmental|healthcare|education|security|technology",
-                        "impact": "Expected impact description",
-                        "implementation_steps": ["step 1", "step 2", "step 3"]
+                        "impact": "Expected impact based on similar real examples from data",
+                        "implementation_steps": ["step based on real examples"],
+                        "supporting_evidence": "Specific data reference from context"
                     }}
                 ],
                 "visualizations": [
                     {{
-                        "type": "chart|graph|map|table",
-                        "title": "Visualization Title",
-                        "data_type": "economic|social|environmental|comparative",
-                        "description": "What this visualization shows"
+                        "type": "chart",
+                        "title": "Chart title based on real data",
+                        "data_source": "Specific data reference",
+                        "real_data_points": true
                     }}
                 ]
             }}
@@ -78,38 +91,63 @@ class PolicyAIAnalyzer:
             # Parse AI response
             parsed_response = self._parse_ai_response(response)
             
-            # Generate visualizations
-            visualizations = await self._generate_visualizations(
-                parsed_response.get('visualizations', []),
-                user_message
+            # Generate data-driven visualizations
+            visualizations = await self._generate_data_driven_visualizations(
+                scraped_data, 
+                user_message,
+                parsed_response.get('visualizations', [])
             )
             
-            # Create policy recommendations
-            recommendations = self._create_policy_recommendations(
+            # Create evidence-based policy recommendations
+            recommendations = self._create_evidence_based_recommendations(
                 parsed_response.get('policy_recommendations', [])
             )
             
             return {
                 'message': parsed_response.get('main_response', response),
+                'data_availability': parsed_response.get('data_availability', 'Limited data available'),
                 'insights': parsed_response.get('insights', []),
                 'policies': recommendations,
                 'visualizations': visualizations,
-                'supporting_data_count': len(scraped_data) if scraped_data else 0
+                'supporting_data_count': len(scraped_data)
             }
             
         except Exception as e:
             logger.error(f"Error in policy analysis: {e}")
-            return {
-                'message': f"I apologize, but I encountered an error while analyzing your policy question. However, I can still provide some general insights based on policy analysis principles.",
-                'insights': [
-                    "Policy analysis requires comprehensive data from multiple sources",
-                    "Effective policies should consider economic, social, and environmental impacts",
-                    "Stakeholder engagement is crucial for successful policy implementation"
-                ],
-                'policies': [],
-                'visualizations': [],
-                'supporting_data_count': 0
-            }
+            return await self._handle_error_scenario(user_message, str(e))
+
+    async def _handle_no_data_scenario(self, user_message: str) -> Dict[str, Any]:
+        """Handle cases where no real data is available"""
+        return {
+            'message': f"""I cannot provide a comprehensive analysis for your question about "{user_message}" because no relevant real-time data is currently available in the system. 
+
+To provide accurate policy analysis, I need access to current economic indicators, policy outcome data, and relevant research findings. 
+
+Would you like me to:
+1. Suggest what specific data sources would be helpful for this analysis
+2. Provide general policy analysis principles that apply to this area
+3. Wait while the system attempts to gather more relevant data""",
+            'data_availability': 'No relevant data currently available',
+            'insights': [
+                'Policy analysis requires access to current and historical data',
+                'Effective analysis needs multiple data sources for validation',
+                'Data availability directly impacts analysis quality and reliability'
+            ],
+            'policies': [],
+            'visualizations': [],
+            'supporting_data_count': 0
+        }
+
+    async def _handle_error_scenario(self, user_message: str, error: str) -> Dict[str, Any]:
+        """Handle error scenarios transparently"""
+        return {
+            'message': f'I encountered a technical error while analyzing your policy question: "{user_message}". Error details: {error}. Please try rephrasing your question or try again later.',
+            'data_availability': 'Error accessing data',
+            'insights': ['Technical issues can affect analysis quality'],
+            'policies': [],
+            'visualizations': [],
+            'supporting_data_count': 0
+        }
 
     def _get_policy_analyst_prompt(self) -> str:
         """System prompt for policy analysis AI"""
