@@ -135,12 +135,15 @@ export const mockPolicyRecommendations: PolicyRecommendation[] = [
     priority: 'high',
     category: 'Environmental Policy',
     impact: 'Critical for long-term sustainability and economic stability',
-    implementation: [
+    implementation_steps: [
       'Establish carbon pricing mechanism',
       'Invest in renewable energy infrastructure',
       'Develop climate risk assessment protocols',
       'Create green job transition programs'
-    ]
+    ],
+    supporting_insights: [],
+    supporting_data_ids: [],
+    created_at: new Date().toISOString()
   },
   {
     id: '3',
