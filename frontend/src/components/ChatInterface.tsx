@@ -3,11 +3,11 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, Database } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
-import { mockChatMessages, generateMockResponse } from '../data/mock';
 import MessageBubble from './MessageBubble';
 import { toast } from '../hooks/use-toast';
+import apiService from '../services/api';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
