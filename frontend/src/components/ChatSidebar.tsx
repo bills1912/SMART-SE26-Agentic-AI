@@ -180,15 +180,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
         </div>
       </div>
 
-      {/* Sidebar Toggle Button (when closed) */}
-      {!isOpen && (
-        <button
-          onClick={onToggle}
-          className="fixed left-4 top-4 z-30 p-2 bg-white dark:bg-gray-800 border border-orange-200 dark:border-gray-700 rounded-lg shadow-md hover:bg-orange-50 dark:hover:bg-gray-700 transition-all duration-200"
-        >
-          <ChevronRight className="h-5 w-5 text-orange-600" />
-        </button>
-      )}
+      {/* Note: Toggle button now handled by separate SidebarToggle component */}
 
       {/* Overlay (when sidebar is open) */}
       {isOpen && (
