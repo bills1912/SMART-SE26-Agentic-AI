@@ -32,14 +32,41 @@ class PolicyDatabase:
         try:
             if not data:
                 return 0
-                
-            data_dicts = [item.dict() for item in data]
-            result = await self.db.scraped_data.insert_many(data_dicts)
-            logger.info(f"Saved {len(result.inserted_ids)} scraped items")
+            
+            # Convert to dictionaries and handle datetime serialization
+            data_dicts = []
+            for item in data:
+                item_dict = item.dict()
+                # Ensure datetime objects are properly serialized
+                if 'scraped_at' in item_dict and hasattr(item_dict['scraped_at'], 'isoformat'):
+                    item_dict['scraped_at'] = item_dict['scraped_at'].isoformat()
+                data_dicts.append(item_dict)
+            
+            # Use insert_many with ordered=False to continue on duplicates
+            result = await self.db.scraped_data.insert_many(data_dicts, ordered=False)
+            logger.info(f"Saved {len(result.inserted_ids)} scraped items to database")
             return len(result.inserted_ids)
+            
         except Exception as e:
             logger.error(f"Error saving scraped data: {e}")
-            return 0
+            # Try to save individual items if bulk insert fails
+            try:
+                saved_count = 0
+                for item in data:
+                    try:
+                        item_dict = item.dict()
+                        if 'scraped_at' in item_dict and hasattr(item_dict['scraped_at'], 'isoformat'):
+                            item_dict['scraped_at'] = item_dict['scraped_at'].isoformat()
+                        await self.db.scraped_data.insert_one(item_dict)
+                        saved_count += 1
+                    except Exception as individual_error:
+                        logger.debug(f"Failed to save individual item: {individual_error}")
+                        continue
+                logger.info(f"Fallback: Saved {saved_count} items individually")
+                return saved_count
+            except Exception as fallback_error:
+                logger.error(f"Fallback save also failed: {fallback_error}")
+                return 0
 
     async def get_recent_scraped_data(self, limit: int = 100, category: Optional[str] = None) -> List[ScrapedData]:
         """Get recent scraped data"""
