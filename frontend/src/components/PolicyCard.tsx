@@ -79,13 +79,13 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
           </button>
 
           {expanded && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2">
               {policy.implementation_steps.map((step, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <div className="w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
                     {index + 1}
                   </div>
-                  <div className="text-sm text-gray-700">{step}</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-200">{step}</div>
                 </div>
               ))}
             </div>
