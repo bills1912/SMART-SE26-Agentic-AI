@@ -37,7 +37,7 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
   };
 
   return (
-    <div className="p-4 bg-white border border-orange-200 shadow-md hover:shadow-lg transition-all duration-200 rounded-xl">
+    <div className="p-4 bg-white dark:bg-gray-700 border border-orange-200 dark:border-gray-600 shadow-md hover:shadow-lg transition-all duration-200 rounded-xl">
       <div className="space-y-3">
         {/* Header */}
         <div className="flex items-start justify-between">
