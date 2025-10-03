@@ -56,12 +56,12 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
         </div>
 
         {/* Description */}
-        <p className="text-sm text-gray-600">{policy.description}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-200">{policy.description}</p>
 
         {/* Impact */}
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-          <div className="text-xs font-medium text-orange-800 mb-1">Expected Impact</div>
-          <div className="text-sm text-orange-700">{policy.impact}</div>
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/50 rounded-lg p-3">
+          <div className="text-xs font-medium text-orange-800 dark:text-orange-300 mb-1">Expected Impact</div>
+          <div className="text-sm text-orange-700 dark:text-orange-200">{policy.impact}</div>
         </div>
 
         {/* Implementation Steps */}
