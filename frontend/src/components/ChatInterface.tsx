@@ -191,13 +191,13 @@ const ChatInterface: React.FC = () => {
             <div className="border-t border-orange-200 p-6">
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <Textarea
+                  <textarea
                     ref={textareaRef}
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Describe your policy scenario or ask for analysis..."
-                    className="min-h-[80px] resize-none border-orange-200 focus:border-red-400 focus:ring-red-400/20"
+                    className="min-h-[80px] w-full resize-none border border-orange-200 rounded-md p-3 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 focus:outline-none"
                     disabled={isLoading}
                   />
                 </div>
