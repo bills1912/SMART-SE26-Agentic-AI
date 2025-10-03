@@ -121,8 +121,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
             </div>
           ) : sessions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <MessageSquare className="h-12 w-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+            <div className="text-center py-8 text-gray-500 dark:text-gray-300">
+              <MessageSquare className="h-12 w-12 mx-auto mb-3 text-gray-300 dark:text-gray-500" />
               <p>No chat history yet</p>
               <p className="text-sm">Start a new conversation!</p>
             </div>
