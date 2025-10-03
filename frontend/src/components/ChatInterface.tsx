@@ -146,9 +146,9 @@ const ChatInterface: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           {/* Compact Header */}
           <div className="mb-4 flex items-center justify-between">
-            {/* Left: App Title */}
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center">
+            {/* Left: Brand Logo */}
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center mr-3">
                 <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
