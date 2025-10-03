@@ -27,6 +27,39 @@ const ChatInterface: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    // Check backend availability and get initial status
+    checkBackendStatus();
+    // Add welcome message
+    addWelcomeMessage();
+  }, []);
+
+  const checkBackendStatus = async () => {
+    try {
+      const available = await apiService.isBackendAvailable();
+      setIsBackendAvailable(available);
+      
+      if (available) {
+        const health = await apiService.getHealth();
+        setScrapingStatus(health.scraping_status);
+      }
+    } catch (error) {
+      setIsBackendAvailable(false);
+      console.error('Backend not available:', error);
+    }
+  };
+
+  const addWelcomeMessage = () => {
+    const welcomeMessage: ChatMessage = {
+      id: 'welcome_' + Date.now(),
+      session_id: 'welcome',
+      sender: 'ai',
+      content: 'Hello! I\'m your AI Policy Analyst. I can help you analyze policy scenarios, generate insights, and create visualizations using real-time data from government, economic, news, and academic sources. What policy area would you like to explore today?',
+      timestamp: new Date(),
+    };
+    setMessages([welcomeMessage]);
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
