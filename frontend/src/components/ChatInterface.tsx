@@ -221,7 +221,23 @@ const ChatInterface: React.FC = () => {
 
         {/* Status Bar */}
         <div className="mt-4 text-center text-sm text-gray-500">
-          <p>AI-powered policy analysis • Real-time visualizations • Strategic insights</p>
+          <div className="flex items-center justify-center gap-4">
+            <span>AI-powered policy analysis</span>
+            <span>•</span>
+            <span>Real-time visualizations</span>
+            <span>•</span>
+            <div className="flex items-center gap-1">
+              <Database className="h-3 w-3" />
+              <span className={scrapingStatus === 'in_progress' ? 'text-orange-600' : 'text-gray-500'}>
+                {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
+              </span>
+            </div>
+            <span>•</span>
+            <div className={`w-2 h-2 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className={isBackendAvailable ? 'text-green-600' : 'text-red-600'}>
+              {isBackendAvailable ? 'Connected' : 'Offline'}
+            </span>
+          </div>
         </div>
       </div>
     </div>
