@@ -92,7 +92,7 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
           )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 };
 
