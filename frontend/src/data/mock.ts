@@ -173,6 +173,7 @@ export const mockChatMessages: ChatMessage[] = [
   },
   {
     id: '2',
+    session_id: 'mock_session',
     sender: 'user',
     content: 'I need to analyze the potential impact of new digital infrastructure policies on economic growth.',
     timestamp: new Date(Date.now() - 4 * 60 * 1000),
