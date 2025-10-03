@@ -180,6 +180,7 @@ export const mockChatMessages: ChatMessage[] = [
   },
   {
     id: '3',
+    session_id: 'mock_session',
     sender: 'ai',
     content: 'I\'ve analyzed the digital infrastructure policy impacts. Based on economic modeling and stakeholder analysis, here are the key findings:',
     timestamp: new Date(Date.now() - 3 * 60 * 1000),
