@@ -342,7 +342,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "All backend tasks completed and tested"
+    - "Initial Load & Welcome Message"
+    - "Chat Interface Functionality"
+    - "Dynamic Visualizations"
+    - "Policy Insights & Recommendations"
+    - "Session Management"
+    - "Real-time Status Indicators"
+    - "Responsive Design & UI"
+    - "Error Handling"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
