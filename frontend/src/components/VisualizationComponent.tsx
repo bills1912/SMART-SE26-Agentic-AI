@@ -8,9 +8,9 @@ interface VisualizationComponentProps {
 
 const VisualizationComponent: React.FC<VisualizationComponentProps> = ({ visualization }) => {
   return (
-    <div className="p-6 bg-white border border-orange-200 shadow-lg rounded-xl">
+    <div className="p-6 bg-white dark:bg-gray-700 border border-orange-200 dark:border-gray-600 shadow-lg rounded-xl">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">{visualization.title}</h3>
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{visualization.title}</h3>
       </div>
       <div className="w-full">
         <ReactECharts
