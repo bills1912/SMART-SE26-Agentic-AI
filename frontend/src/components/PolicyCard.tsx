@@ -69,11 +69,9 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
 
         {/* Implementation Steps */}
         <div className="space-y-2">
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full justify-between text-gray-600 hover:text-red-600"
+            className="w-full flex items-center justify-between text-gray-600 hover:text-red-600 hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs"
           >
             <span className="text-xs font-medium">Implementation Steps</span>
             {expanded ? (
@@ -81,7 +79,7 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
             ) : (
               <ChevronDown className="h-4 w-4" />
             )}
-          </Button>
+          </button>
 
           {expanded && (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
