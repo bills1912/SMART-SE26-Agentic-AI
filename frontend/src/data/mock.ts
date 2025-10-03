@@ -199,6 +199,7 @@ export const generateMockResponse = (userMessage: string): ChatMessage => {
 
   return {
     id: Math.random().toString(36).substr(2, 9),
+    session_id: 'mock_session',
     sender: 'ai',
     content: responseTexts[Math.floor(Math.random() * responseTexts.length)],
     timestamp: new Date(),
