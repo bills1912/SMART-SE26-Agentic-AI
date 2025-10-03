@@ -82,7 +82,7 @@ const ChatInterface: React.FC = () => {
       }
 
       // Call real API
-      const response = await apiService.sendMessage(originalMessage, currentSessionId);
+      const response = await apiService.sendMessage(originalMessage, currentSessionId || undefined);
       
       // Update session ID if this is a new conversation
       if (!currentSessionId) {
