@@ -52,9 +52,9 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
                 {policy.priority.toUpperCase()} PRIORITY
               </div>
             </div>
-            <Badge variant="outline" className="text-xs mb-2">
+            <div className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold text-foreground mb-2">
               {policy.category}
-            </Badge>
+            </div>
           </div>
         </div>
 
