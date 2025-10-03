@@ -27,15 +27,18 @@ class PolicyAIAnalyzer:
     ) -> Dict[str, Any]:
         """Data-driven policy analysis using AI - only use available real data"""
         try:
+            # Detect user input language
+            user_language = self._detect_language(user_message)
+            
             # Check if we have actual data
             if not scraped_data or len(scraped_data) == 0:
-                return await self._handle_no_data_scenario(user_message)
+                return await self._handle_no_data_scenario(user_message, user_language)
             
-            # Initialize AI chat
+            # Initialize AI chat with language-aware prompt
             chat = LlmChat(
                 api_key=self.api_key,
                 session_id=session_id,
-                system_message=self._get_data_driven_analyst_prompt()
+                system_message=self._get_data_driven_analyst_prompt(user_language)
             ).with_model("openai", "gpt-4o-mini")
 
             # Prepare detailed context from real scraped data
