@@ -166,7 +166,7 @@ const ChatInterface: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <div className="bg-white/80 backdrop-blur-sm border-orange-200 shadow-xl rounded-xl border">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-orange-200 dark:border-gray-700 shadow-xl rounded-xl border">
           <div className="h-[70vh] flex flex-col">
             {/* Messages */}
             <div className="flex-1 p-6 overflow-auto">
@@ -179,9 +179,13 @@ const ChatInterface: React.FC = () => {
                     <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
                       <Bot className="h-4 w-4 text-white" />
                     </div>
-                    <div className="flex items-center gap-2 text-gray-600">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Analyzing policy scenario...</span>
+                      <span>
+                        {scrapingStatus === 'in_progress' 
+                          ? 'Gathering latest policy data...' 
+                          : 'Analyzing policy scenario...'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -190,7 +194,7 @@ const ChatInterface: React.FC = () => {
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-orange-200 p-6">
+            <div className="border-t border-orange-200 dark:border-gray-700 p-6">
               <div className="flex gap-4">
                 <div className="flex-1">
                   <textarea
@@ -199,7 +203,7 @@ const ChatInterface: React.FC = () => {
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Describe your policy scenario or ask for analysis..."
-                    className="min-h-[80px] w-full resize-none border border-orange-200 rounded-md p-3 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 focus:outline-none"
+                    className="min-h-[80px] w-full resize-none border border-orange-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md p-3 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 focus:outline-none"
                     disabled={isLoading}
                   />
                 </div>
