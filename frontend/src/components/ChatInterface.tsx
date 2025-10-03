@@ -9,14 +9,17 @@ import ChatSidebar from './ChatSidebar';
 import { useChat } from '../contexts/ChatContext';
 
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { currentSession, addMessageToCurrentSession } = useChat();
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [scrapingStatus, setScrapingStatus] = useState<'idle' | 'in_progress'>('idle');
   const [isBackendAvailable, setIsBackendAvailable] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Get messages from current session
+  const messages = currentSession?.messages || [];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
