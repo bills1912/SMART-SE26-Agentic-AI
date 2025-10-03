@@ -50,7 +50,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         {/* Visualizations */}
         {message.visualizations && message.visualizations.length > 0 && (
           <div className="mt-4 space-y-4">
-            <div className="flex items-center gap-2 text-red-600 font-medium">
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
               <TrendingUp className="h-4 w-4" />
               <span>Data Visualizations</span>
             </div>
@@ -65,7 +65,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         {/* Insights */}
         {message.insights && message.insights.length > 0 && (
           <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-2 text-red-600 font-medium">
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
               <Lightbulb className="h-4 w-4" />
               <span>Key Insights</span>
             </div>
@@ -80,7 +80,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         {/* Policy Recommendations */}
         {message.policies && message.policies.length > 0 && (
           <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-2 text-red-600 font-medium">
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
               <FileText className="h-4 w-4" />
               <span>Policy Recommendations</span>
             </div>
