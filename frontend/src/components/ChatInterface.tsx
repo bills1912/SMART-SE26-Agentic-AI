@@ -4,6 +4,7 @@ import { ChatMessage } from '../types/chat';
 import MessageBubble from './MessageBubble';
 import { toast } from '../hooks/use-toast';
 import apiService from '../services/api';
+import ThemeToggle from './ThemeToggle';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
