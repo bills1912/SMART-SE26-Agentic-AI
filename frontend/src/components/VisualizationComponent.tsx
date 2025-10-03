@@ -9,7 +9,7 @@ interface VisualizationComponentProps {
 
 const VisualizationComponent: React.FC<VisualizationComponentProps> = ({ visualization }) => {
   return (
-    <Card className="p-6 bg-white border-orange-200 shadow-lg">
+    <div className="p-6 bg-white border border-orange-200 shadow-lg rounded-xl">
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-gray-800">{visualization.title}</h3>
       </div>
@@ -20,7 +20,7 @@ const VisualizationComponent: React.FC<VisualizationComponentProps> = ({ visuali
           opts={{ renderer: 'svg' }}
         />
       </div>
-    </Card>
+    </div>
   );
 };
 
