@@ -50,17 +50,19 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim() || isLoading || !currentSession) return;
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
-      session_id: currentSessionId || 'temp',
+      session_id: currentSession.id || '',
       sender: 'user',
       content: inputMessage.trim(),
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Add user message to session
+    addMessageToCurrentSession(userMessage);
+    
     const originalMessage = inputMessage.trim();
     setInputMessage('');
     setIsLoading(true);
@@ -71,12 +73,7 @@ const ChatInterface: React.FC = () => {
       }
 
       // Call real API
-      const response = await apiService.sendMessage(originalMessage, currentSessionId || undefined);
-      
-      // Update session ID if this is a new conversation
-      if (!currentSessionId) {
-        setCurrentSessionId(response.session_id);
-      }
+      const response = await apiService.sendMessage(originalMessage, currentSession.id);
       
       // Create AI response message
       const aiResponse: ChatMessage = {
@@ -90,7 +87,8 @@ const ChatInterface: React.FC = () => {
         policies: response.policies || [],
       };
       
-      setMessages(prev => [...prev, aiResponse]);
+      // Add AI response to session
+      addMessageToCurrentSession(aiResponse);
       
       toast({
         title: "Analysis Complete",
@@ -107,13 +105,13 @@ const ChatInterface: React.FC = () => {
       // Fallback response for errors
       const errorResponse: ChatMessage = {
         id: 'error_' + Date.now(),
-        session_id: currentSessionId || 'temp',
+        session_id: currentSession.id || '',
         sender: 'ai',
         content: 'I apologize, but I encountered an issue while analyzing your policy question. This could be due to high demand or temporary service issues. Please try again in a moment.',
         timestamp: new Date(),
       };
       
-      setMessages(prev => [...prev, errorResponse]);
+      addMessageToCurrentSession(errorResponse);
       
       toast({
         title: "Connection Error",
