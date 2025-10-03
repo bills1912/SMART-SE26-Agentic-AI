@@ -48,9 +48,9 @@ const PolicyCard: React.FC<PolicyCardProps> = ({ policy }) => {
             <div className="flex items-center gap-2 mb-2">
               {getPriorityIcon(policy.priority)}
               <h4 className="font-semibold text-gray-800">{policy.title}</h4>
-              <Badge className={`text-xs ${getPriorityColor(policy.priority)}`}>
+              <div className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold ${getPriorityColor(policy.priority)}`}>
                 {policy.priority.toUpperCase()} PRIORITY
-              </Badge>
+              </div>
             </div>
             <Badge variant="outline" className="text-xs mb-2">
               {policy.category}
