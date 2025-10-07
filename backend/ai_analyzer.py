@@ -9,6 +9,10 @@ from models import (
 import json
 import logging
 from datetime import datetime
+from langdetect import detect, DetectorFactory
+
+# Set seed for consistent language detection results
+DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
 
