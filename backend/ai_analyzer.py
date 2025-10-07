@@ -276,42 +276,68 @@ Would you like me to:
         """
 
     def _detect_language(self, text: str) -> str:
-        """Detect the language of user input"""
-        # Simple language detection based on common words and patterns
-        text_lower = text.lower()
-        
-        # Spanish indicators
-        spanish_words = ['que', 'del', 'los', 'las', 'una', 'para', 'con', 'por', 'como', 'cual', 'donde', 'cuando', 'porque', 'economia', 'politica', 'datos']
-        if any(word in text_lower for word in spanish_words):
-            return "Spanish"
-        
-        # French indicators
-        french_words = ['que', 'des', 'les', 'une', 'pour', 'avec', 'par', 'comme', 'quel', 'ou', 'quand', 'pourquoi', 'économie', 'politique', 'données']
-        if any(word in text_lower for word in french_words):
-            return "French"
-        
-        # German indicators
-        german_words = ['das', 'der', 'die', 'und', 'mit', 'für', 'von', 'wie', 'wo', 'wann', 'warum', 'wirtschaft', 'politik', 'daten']
-        if any(word in text_lower for word in german_words):
-            return "German"
-        
-        # Italian indicators
-        italian_words = ['che', 'del', 'gli', 'una', 'per', 'con', 'come', 'dove', 'quando', 'perché', 'economia', 'politica', 'dati']
-        if any(word in text_lower for word in italian_words):
-            return "Italian"
-        
-        # Portuguese indicators
-        portuguese_words = ['que', 'dos', 'uma', 'para', 'com', 'por', 'como', 'onde', 'quando', 'porque', 'economia', 'política', 'dados']
-        if any(word in text_lower for word in portuguese_words):
-            return "Portuguese"
-        
-        # Chinese indicators (simplified)
-        chinese_chars = ['的', '和', '在', '是', '有', '了', '不', '经济', '政策', '数据']
-        if any(char in text for char in chinese_chars):
-            return "Chinese"
-        
-        # Default to English
-        return "English"
+        """Detect the language of user input using langdetect library"""
+        try:
+            # Use langdetect library for accurate language detection
+            detected_code = detect(text)
+            
+            # Map language codes to full names
+            language_map = {
+                'en': 'English',
+                'es': 'Spanish',
+                'fr': 'French',
+                'de': 'German',
+                'it': 'Italian',
+                'pt': 'Portuguese',
+                'zh-cn': 'Chinese',
+                'zh-tw': 'Chinese',
+                'ja': 'Japanese',
+                'ko': 'Korean',
+                'ar': 'Arabic',
+                'ru': 'Russian',
+                'hi': 'Hindi',
+                'nl': 'Dutch',
+                'sv': 'Swedish',
+                'no': 'Norwegian',
+                'da': 'Danish',
+                'fi': 'Finnish',
+                'pl': 'Polish',
+                'tr': 'Turkish',
+                'vi': 'Vietnamese',
+                'th': 'Thai',
+                'id': 'Indonesian',
+                'ms': 'Malay',
+                'ro': 'Romanian',
+                'cs': 'Czech',
+                'hu': 'Hungarian',
+                'el': 'Greek',
+                'he': 'Hebrew',
+                'uk': 'Ukrainian',
+                'bg': 'Bulgarian',
+                'sr': 'Serbian',
+                'hr': 'Croatian',
+                'sk': 'Slovak',
+                'sl': 'Slovenian',
+                'et': 'Estonian',
+                'lv': 'Latvian',
+                'lt': 'Lithuanian',
+                'fa': 'Persian',
+                'ur': 'Urdu',
+                'bn': 'Bengali',
+                'ta': 'Tamil',
+                'te': 'Telugu',
+                'mr': 'Marathi'
+            }
+            
+            # Get full language name or default to English
+            language = language_map.get(detected_code, 'English')
+            logger.info(f"Detected language: {language} (code: {detected_code}) for text: {text[:50]}...")
+            return language
+            
+        except Exception as e:
+            # Fallback to English if detection fails
+            logger.warning(f"Language detection failed: {e}. Defaulting to English.")
+            return "English"
 
     def _is_analysis_related_query(self, user_message: str) -> bool:
         """Determine if the user query is related to analysis, data, policy, etc."""
