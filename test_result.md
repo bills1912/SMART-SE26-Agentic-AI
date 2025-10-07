@@ -237,6 +237,18 @@ backend:
         agent: "testing"
         comment: "✅ Visualization generation working correctly. AI generates appropriate ECharts configurations for economic, social, and network graphs. Visualizations properly formatted for frontend consumption."
 
+  - task: "Multilingual Language Detection & Response"
+    implemented: true
+    working: "NA"
+    file: "backend/ai_analyzer.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "🔧 FIXED: Replaced simple keyword-based language detection with langdetect library for accurate identification. Previous issue: French was being misdetected as Spanish due to overlapping keywords (que, una, para, etc.). New implementation uses langdetect library with comprehensive language mapping supporting 40+ languages. Added logging for language detection debugging. Needs comprehensive testing with multiple languages (especially French, Spanish, German, Italian, Portuguese, Chinese, etc.) to verify responses match input language."
+
 frontend:
   - task: "Initial Load & Welcome Message"
     implemented: true
