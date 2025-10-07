@@ -371,16 +371,17 @@ frontend:
         comment: "✅ WORKING PERFECTLY. Error handling implemented with try-catch blocks, fallback responses for API failures, toast notifications for user feedback, and graceful degradation. No console errors detected during testing. System handles network issues appropriately."
 
 metadata:
-  created_by: "testing_agent"
-  version: "1.0"
-  test_sequence: 2
-  run_ui: true
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 3
+  run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Multilingual Language Detection & Response"
   stuck_tasks: []
   test_all: false
-  test_priority: "completed"
+  test_priority: "high_first"
 
 agent_communication:
   - agent: "testing"
@@ -389,3 +390,5 @@ agent_communication:
     message: "Starting comprehensive frontend testing for AI Policy & Insight Generator. Will test all 8 frontend components including chat interface, visualizations, policy cards, session management, and real-time status indicators. Backend is confirmed working, so focusing on UI/UX and frontend-backend integration."
   - agent: "testing"
     message: "🎉 COMPREHENSIVE FRONTEND TESTING COMPLETED SUCCESSFULLY! All 8 frontend tasks are now WORKING PERFECTLY. Fixed TypeScript compilation issues by replacing shadcn UI components with native HTML elements. Confirmed: (1) Professional orange/red theme throughout, (2) Real AI integration generating substantial policy analysis, (3) Interactive ECharts visualizations with proper styling, (4) Policy insights and recommendations with expandable implementation steps, (5) Session management and conversation continuity, (6) Real-time status indicators, (7) Responsive design, (8) Error handling. System is production-ready with full end-to-end functionality. 100% SUCCESS RATE on all frontend components!"
+  - agent: "main"
+    message: "🔧 LANGUAGE DETECTION FIX IMPLEMENTED: User reported incompatibility between input language and model response language. Root cause identified: The old _detect_language method used simple keyword matching with overlapping words between languages (e.g., 'que', 'una', 'para' exist in both Spanish and French), causing French to be misdetected as Spanish. Solution: Installed and integrated langdetect library (version 1.0.9) for accurate multi-language detection. Updated ai_analyzer.py with comprehensive language mapping supporting 40+ languages. Added logging for debugging. The AI system prompt already enforces responding in the detected language. Ready for backend testing with multiple language inputs (French, Spanish, German, Italian, Portuguese, Chinese, etc.) to verify AI responses match input language correctly."
