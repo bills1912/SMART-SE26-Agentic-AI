@@ -32,8 +32,15 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute>
+            <Navigate to="/dashboard" replace />
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }
