@@ -219,7 +219,7 @@ const ChatInterface: React.FC = () => {
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
             <div className="space-y-2">
-              {/* Textarea Area - Tanpa tombol di dalam */}
+              {/* Textarea Area - Tanpa tombol di dalam dengan custom scrollbar */}
               <div className="relative">
                 <textarea
                   ref={textareaRef}
@@ -227,33 +227,14 @@ const ChatInterface: React.FC = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Reply..."
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-1 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm scrollbar-hide"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-1 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500"
                   style={{ 
                     minHeight: '44px', 
-                    maxHeight: '120px',
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none'
+                    maxHeight: '120px'
                   }}
                   disabled={isLoading}
                   rows={1}
                 />
-                
-                {/* Custom scrollbar style */}
-                <style jsx>{`
-                  textarea::-webkit-scrollbar {
-                    width: 4px;
-                  }
-                  textarea::-webkit-scrollbar-track {
-                    background: transparent;
-                  }
-                  textarea::-webkit-scrollbar-thumb {
-                    background: rgba(156, 163, 175, 0.5);
-                    border-radius: 2px;
-                  }
-                  textarea::-webkit-scrollbar-thumb:hover {
-                    background: rgba(156, 163, 175, 0.8);
-                  }
-                `}</style>
               </div>
 
               {/* Bottom Row - Controls terpisah */}
