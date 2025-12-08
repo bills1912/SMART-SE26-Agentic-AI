@@ -7,6 +7,7 @@ import apiService from '../services/api';
 import ThemeToggle from './ThemeToggle';
 import ChatSidebar from './ChatSidebar';
 import SidebarToggle from './SidebarToggle';
+import UserMenu from './UserMenu';
 import { useChat } from '../contexts/ChatContext';
 
 const ChatInterface: React.FC = () => {
