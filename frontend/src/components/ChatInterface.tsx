@@ -26,6 +26,15 @@ const ChatInterface: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Handle voice transcript
+  const handleVoiceTranscript = (transcript: string) => {
+    if (transcript.trim()) {
+      setInputMessage(prev => (prev + ' ' + transcript).trim());
+      // Auto-focus textarea after voice input
+      textareaRef.current?.focus();
+    }
+  };
+
   // Get messages from current session
   const messages = currentSession?.messages || [];
 
