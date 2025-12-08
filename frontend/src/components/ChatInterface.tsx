@@ -12,7 +12,12 @@ import UserMenu from './UserMenu';
 import { useChat } from '../contexts/ChatContext';
 
 const ChatInterface: React.FC = () => {
-  const { currentSession, addMessageToCurrentSession } = useChat();
+  const { 
+    currentSession, 
+    addMessageToCurrentSession,
+    createNewChat,
+    exportCurrentChat
+  } = useChat();
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [scrapingStatus, setScrapingStatus] = useState<'idle' | 'in_progress'>('idle');
