@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Database } from 'lucide-react';
+import { Send, Bot, User, Loader2, Database, Menu } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
 import MessageBubble from './MessageBubble';
 import { toast } from '../hooks/use-toast';
