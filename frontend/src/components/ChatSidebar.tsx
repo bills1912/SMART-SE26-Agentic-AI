@@ -46,10 +46,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
 
   return (
     <>
-      {/* Sidebar - Fixed with flex layout for proper scrolling */}
-      <div className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-orange-200 dark:border-gray-700 shadow-lg transform transition-transform duration-300 z-40 flex flex-col ${
+      {/* Sidebar - Overlay on mobile, fixed on desktop */}
+      <div className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-orange-200 dark:border-gray-700 shadow-lg transform transition-transform duration-300 flex flex-col w-80 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
-      } w-80`}>
+      } z-50`}>
         
         {/* Header - Fixed height section */}
         <div className="flex-shrink-0 p-4 border-b border-orange-200 dark:border-gray-700">
