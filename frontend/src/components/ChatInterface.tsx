@@ -142,18 +142,17 @@ const ChatInterface: React.FC = () => {
       {/* Sidebar Toggle Button */}
       <SidebarToggle isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       
-      {/* Main Content - Claude-style full-width elegant layout */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${
+      {/* Main Content - Claude-style FULL WIDTH elegant layout */}
+      <div className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
         sidebarOpen ? 'ml-80' : 'ml-0'
       }`}>
-        <div className="max-w-4xl mx-auto w-full h-screen flex flex-col px-6 py-4">
-          
-          {/* Elegant Header - Minimal & Clean */}
-          <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-6">
+        {/* Elegant Header - Full width with max-width container */}
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <div className="max-w-5xl mx-auto px-8 py-4 flex items-center justify-between">
             {/* Left: Title */}
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center">
-                <Bot className="h-3.5 w-3.5 text-white" />
+              <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center">
+                <Bot className="h-4 w-4 text-white" />
               </div>
               <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
                 AI Policy & Insight Generator
@@ -161,18 +160,17 @@ const ChatInterface: React.FC = () => {
             </div>
             
             {/* Right: Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <ThemeToggle />
               <UserMenu />
             </div>
           </div>
+        </div>
 
-          {/* Chat Messages Area - Claude-style clean & spacious */}
-          <div 
-            className="flex-1 overflow-y-auto mb-6"
-            style={{ minHeight: 0 }}
-          >
-            <div className="space-y-8 py-4">
+        {/* Chat Messages Area - Claude-style FULL WIDTH clean & spacious */}
+        <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+          <div className="max-w-5xl mx-auto px-8 py-8">
+            <div className="space-y-10">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
