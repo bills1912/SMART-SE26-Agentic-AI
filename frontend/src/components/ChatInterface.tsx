@@ -218,7 +218,7 @@ const ChatInterface: React.FC = () => {
         {/* Input Container - Claude/Emergent style tanpa status text */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
-            {/* Single Input Container dengan border dan rounded corners + focus ring */}
+            {/* Single Input Container - Seamless tanpa separator */}
             <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
               {/* Textarea Area - Bagian Atas */}
               <div className="relative">
@@ -238,10 +238,7 @@ const ChatInterface: React.FC = () => {
                 />
               </div>
 
-              {/* Separator Line - Internal divider */}
-              <div className="border-t border-gray-200 dark:border-gray-600"></div>
-
-              {/* Controls Row - Background SAMA PERSIS dengan container */}
+              {/* Controls Row - Seamless blend tanpa separator */}
               <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800">
                 {/* Left: Voice Recording Button */}
                 <div className="flex items-center">
