@@ -254,15 +254,18 @@ backend:
 
   - task: "User Authentication System - Emergent OAuth + JWT"
     implemented: true
-    working: "NA"
+    working: false
     file: "backend/auth_routes.py, frontend/src/pages/LoginPage.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "🎯 IMPLEMENTED: Complete authentication system with dual methods: (1) Emergent Google OAuth using auth.emergentagent.com with dynamic redirect URL (window.location.origin), (2) Email/Password with JWT and bcrypt hashing. Backend: auth_routes.py (OAuth callback, register, login, /me, logout), auth_service.py (session management, password hashing, Emergent API integration), auth_models.py (User, UserSession, LoginRequest, RegisterRequest). Frontend: LoginPage.tsx, RegisterPage.tsx, AuthCallback.tsx (processes session_id from URL fragment), AuthContext.tsx (manages auth state with checkAuth delay optimization), ProtectedRoute.tsx (guards /dashboard). MongoDB stores users (with custom user_id UUID) and user_sessions (7-day expiry). All routes require login - no guest mode. Session tokens stored in httpOnly cookies. Added UserMenu component with logout. Follows Emergent Auth playbook guidelines. Needs testing: OAuth flow, email/password registration/login, session persistence, protected routes, logout functionality."
+      - working: false
+        agent: "testing"
+        comment: "🔍 COMPREHENSIVE AUTHENTICATION TESTING COMPLETED: ✅ Email/Password Registration: Works perfectly - user 'Frontend Test' created successfully, redirected to dashboard. ✅ Email/Password Login: Works perfectly - login successful, redirected to dashboard, user name visible in interface. ✅ Google OAuth Flow: Works correctly - redirects to auth.emergentagent.com with proper callback URL. ❌ CRITICAL ISSUE - Session Persistence Problem: Users get automatically logged out and redirected back to login page. Console shows 401 'Not authenticated' errors from /auth/me endpoint. This breaks the user experience as users cannot stay logged in. ❌ Cannot test logout functionality due to session persistence issue. Backend logs show successful login (200 status) but subsequent /auth/me calls return 401. Root cause: Session cookies not being properly set/maintained or session validation failing on backend."
 
 frontend:
   - task: "Theme Switcher Tooltip Overflow Fix"
