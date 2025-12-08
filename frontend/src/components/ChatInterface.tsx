@@ -188,9 +188,9 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Messages Area - FULL WIDTH tanpa blank space */}
+        {/* Chat Messages Area - Narrow content, full width background */}
         <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-          <div className="w-full px-8 py-3">
+          <div className="max-w-4xl mx-auto px-8 py-3">
             <div className="space-y-6">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
