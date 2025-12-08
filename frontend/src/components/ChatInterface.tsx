@@ -205,54 +205,100 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Ultra-Compact Input - MAXIMUM chat viewport */}
+        {/* Ultra-Compact Input - MAXIMUM chat viewport dengan layout terpisah */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
-            <div className="relative flex items-center">
-              <textarea
-                ref={textareaRef}
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Reply..."
-                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-1 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm"
-                style={{ minHeight: '40px', maxHeight: '200px' }}
-                disabled={isLoading}
-                rows={1}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={isLoading || !inputMessage.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={isLoading ? "Analyzing..." : "Send message"}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            
-            {/* Minimal Status Line */}
-            <div className="flex items-center justify-between mt-1.5 text-[10px] text-gray-500 dark:text-gray-400">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-0.5">
-                  <Database className="h-2 w-2" />
-                  <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
-                    {scrapingStatus === 'in_progress' ? 'Gathering...' : 'Ready'}
-                  </span>
+            <div className="space-y-2">
+              {/* Textarea Area - Tanpa tombol di dalam */}
+              <div className="relative">
+                <textarea
+                  ref={textareaRef}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Reply..."
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-1 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm scrollbar-hide"
+                  style={{ 
+                    minHeight: '44px', 
+                    maxHeight: '120px',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none'
+                  }}
+                  disabled={isLoading}
+                  rows={1}
+                />
+                
+                {/* Custom scrollbar style */}
+                <style jsx>{`
+                  textarea::-webkit-scrollbar {
+                    width: 4px;
+                  }
+                  textarea::-webkit-scrollbar-track {
+                    background: transparent;
+                  }
+                  textarea::-webkit-scrollbar-thumb {
+                    background: rgba(156, 163, 175, 0.5);
+                    border-radius: 2px;
+                  }
+                  textarea::-webkit-scrollbar-thumb:hover {
+                    background: rgba(156, 163, 175, 0.8);
+                  }
+                `}</style>
+              </div>
+
+              {/* Bottom Row - Controls terpisah */}
+              <div className="flex items-center justify-between">
+                {/* Left: Voice Recording + Status */}
+                <div className="flex items-center gap-3">
+                  {/* Voice Recording Button */}
+                  <button
+                    className="p-2 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 group"
+                    title="Voice Recording"
+                  >
+                    <svg className="h-4 w-4 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                  </button>
+
+                  {/* Status Indicators - Compact */}
+                  <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-0.5">
+                      <Database className="h-2 w-2" />
+                      <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
+                        {scrapingStatus === 'in_progress' ? 'Gathering...' : 'Ready'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <div className={`w-1 h-1 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                        {isBackendAvailable ? 'Connected' : 'Offline'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-0.5">
-                  <div className={`w-1 h-1 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                    {isBackendAvailable ? 'Connected' : 'Offline'}
-                  </span>
+
+                {/* Right: Send Button + Disclaimer */}
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                    AI can make mistakes
+                  </p>
+                  
+                  {/* Send Button - Terpisah */}
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={isLoading || !inputMessage.trim()}
+                    className="p-2.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    title={isLoading ? "Analyzing..." : "Send message"}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
-              <p className="text-gray-400 dark:text-gray-500">
-                AI can make mistakes
-              </p>
             </div>
           </div>
         </div>
