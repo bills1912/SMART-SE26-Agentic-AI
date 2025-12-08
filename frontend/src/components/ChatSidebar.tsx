@@ -46,13 +46,13 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
 
   return (
     <>
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-orange-200 dark:border-gray-700 shadow-lg transform transition-transform duration-300 z-40 ${
+      {/* Sidebar - Fixed with flex layout for proper scrolling */}
+      <div className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-orange-200 dark:border-gray-700 shadow-lg transform transition-transform duration-300 z-40 flex flex-col ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } w-80`}>
         
-        {/* Header */}
-        <div className="p-4 border-b border-orange-200 dark:border-gray-700">
+        {/* Header - Fixed height section */}
+        <div className="flex-shrink-0 p-4 border-b border-orange-200 dark:border-gray-700">
           {/* Brand Section */}
           <div className="flex items-center justify-between mb-4">
             <BrandLogo size="lg" showText={true} />
@@ -119,8 +119,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
           </div>
         </div>
 
-        {/* Chat Sessions List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Chat Sessions List - Scrollable section with flex-1 */}
+        <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
