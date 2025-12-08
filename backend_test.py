@@ -490,6 +490,213 @@ class PolicyBackendTester:
         except Exception as e:
             self.log_test_result("AI Integration", False, f"Exception: {str(e)}")
             return False
+
+    async def test_multilingual_language_detection(self) -> Dict[str, bool]:
+        """Test multilingual language detection and response system"""
+        test_cases = [
+            {
+                "language": "French",
+                "input": "Analysez l'impact des politiques de tarification du carbone sur les industries manufacturières",
+                "expected_keywords": ["carbone", "industries", "manufacturières", "impact", "politiques"]
+            },
+            {
+                "language": "Spanish", 
+                "input": "Analiza el impacto económico de las políticas de carbono en las industrias",
+                "expected_keywords": ["impacto", "económico", "políticas", "carbono", "industrias"]
+            },
+            {
+                "language": "German",
+                "input": "Analysieren Sie die wirtschaftlichen Auswirkungen der Klimapolitik",
+                "expected_keywords": ["wirtschaftlichen", "auswirkungen", "klimapolitik"]
+            },
+            {
+                "language": "Indonesian",
+                "input": "Analisis dampak ekonomi dari kebijakan perubahan iklim terhadap industri manufaktur",
+                "expected_keywords": ["dampak", "ekonomi", "kebijakan", "perubahan", "iklim", "industri", "manufaktur"]
+            },
+            {
+                "language": "Portuguese",
+                "input": "Analise o impacto econômico das políticas de carbono nas indústrias",
+                "expected_keywords": ["impacto", "econômico", "políticas", "carbono", "indústrias"]
+            },
+            {
+                "language": "Italian",
+                "input": "Analizza l'impatto economico delle politiche sul carbonio nelle industrie",
+                "expected_keywords": ["impatto", "economico", "politiche", "carbonio", "industrie"]
+            },
+            {
+                "language": "Chinese",
+                "input": "分析碳定价政策对制造业的经济影响",
+                "expected_keywords": ["碳", "政策", "制造业", "经济", "影响"]
+            }
+        ]
+        
+        results = {}
+        
+        for test_case in test_cases:
+            try:
+                language = test_case["language"]
+                input_text = test_case["input"]
+                expected_keywords = test_case["expected_keywords"]
+                
+                logger.info(f"Testing {language} language detection and response...")
+                
+                request_data = {
+                    "message": input_text,
+                    "include_visualizations": True,
+                    "include_insights": True,
+                    "include_policies": True
+                }
+                
+                async with self.session.post(f"{self.base_url}/chat", json=request_data) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        main_response = data.get('message', '')
+                        insights = data.get('insights', [])
+                        policies = data.get('policies', [])
+                        
+                        # Check if response is not empty
+                        if not main_response or len(main_response) < 50:
+                            self.log_test_result(f"Multilingual Test - {language}", False, 
+                                               f"Response too short or empty: {len(main_response)} chars", data)
+                            results[language] = False
+                            continue
+                        
+                        # Check if response contains expected language keywords
+                        response_lower = main_response.lower()
+                        keyword_matches = sum(1 for keyword in expected_keywords if keyword.lower() in response_lower)
+                        
+                        # For non-Latin scripts, check if response contains characters from that script
+                        if language == "Chinese":
+                            chinese_chars = sum(1 for char in main_response if '\u4e00' <= char <= '\u9fff')
+                            if chinese_chars < 10:  # Should have at least 10 Chinese characters
+                                self.log_test_result(f"Multilingual Test - {language}", False, 
+                                                   f"Response not in Chinese. Chinese chars: {chinese_chars}", data)
+                                results[language] = False
+                                continue
+                        else:
+                            # For Latin-based languages, check keyword presence
+                            if keyword_matches < 2:
+                                self.log_test_result(f"Multilingual Test - {language}", False, 
+                                                   f"Response may not be in {language}. Keyword matches: {keyword_matches}/{len(expected_keywords)}", data)
+                                results[language] = False
+                                continue
+                        
+                        # Check insights are in correct language
+                        insights_text = ' '.join(insights) if insights else ''
+                        if insights_text:
+                            if language == "Chinese":
+                                insights_chinese_chars = sum(1 for char in insights_text if '\u4e00' <= char <= '\u9fff')
+                                if insights_chinese_chars < 5:
+                                    self.log_test_result(f"Multilingual Test - {language} Insights", False, 
+                                                       f"Insights not in Chinese. Chinese chars: {insights_chinese_chars}", data)
+                                    results[language] = False
+                                    continue
+                            else:
+                                insights_keyword_matches = sum(1 for keyword in expected_keywords if keyword.lower() in insights_text.lower())
+                                if insights_keyword_matches < 1:
+                                    self.log_test_result(f"Multilingual Test - {language} Insights", False, 
+                                                       f"Insights may not be in {language}. Keyword matches: {insights_keyword_matches}", data)
+                                    results[language] = False
+                                    continue
+                        
+                        # Success case
+                        self.log_test_result(f"Multilingual Test - {language}", True, 
+                                           f"✅ Language detection and response working. Response: {len(main_response)} chars, "
+                                           f"Keywords matched: {keyword_matches}/{len(expected_keywords)}, "
+                                           f"Insights: {len(insights)}, Policies: {len(policies)}", data)
+                        results[language] = True
+                        
+                    else:
+                        error_text = await response.text()
+                        self.log_test_result(f"Multilingual Test - {language}", False, 
+                                           f"HTTP {response.status}: {error_text}")
+                        results[language] = False
+                        
+            except Exception as e:
+                self.log_test_result(f"Multilingual Test - {language}", False, f"Exception: {str(e)}")
+                results[language] = False
+        
+        return results
+
+    async def test_multilingual_edge_cases(self) -> Dict[str, bool]:
+        """Test edge cases for multilingual detection"""
+        edge_cases = [
+            {
+                "name": "Short French Text",
+                "input": "Politique économique française",
+                "expected_language": "French"
+            },
+            {
+                "name": "Short Spanish Text", 
+                "input": "Política económica española",
+                "expected_language": "Spanish"
+            },
+            {
+                "name": "Mixed Language (English-Spanish)",
+                "input": "What is the impacto económico of carbon policies?",
+                "expected_language": "Mixed"
+            },
+            {
+                "name": "English Baseline",
+                "input": "Analyze the economic impact of carbon pricing policies on manufacturing industries",
+                "expected_language": "English"
+            }
+        ]
+        
+        results = {}
+        
+        for case in edge_cases:
+            try:
+                case_name = case["name"]
+                input_text = case["input"]
+                
+                logger.info(f"Testing edge case: {case_name}")
+                
+                request_data = {
+                    "message": input_text,
+                    "include_visualizations": True,
+                    "include_insights": True,
+                    "include_policies": True
+                }
+                
+                async with self.session.post(f"{self.base_url}/chat", json=request_data) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        main_response = data.get('message', '')
+                        
+                        # Check if response is not empty
+                        if not main_response or len(main_response) < 30:
+                            self.log_test_result(f"Edge Case - {case_name}", False, 
+                                               f"Response too short: {len(main_response)} chars", data)
+                            results[case_name] = False
+                            continue
+                        
+                        # For baseline English, ensure it still works
+                        if case_name == "English Baseline":
+                            if 'economic' not in main_response.lower() or 'carbon' not in main_response.lower():
+                                self.log_test_result(f"Edge Case - {case_name}", False, 
+                                                   "English baseline test failed - missing expected content", data)
+                                results[case_name] = False
+                                continue
+                        
+                        self.log_test_result(f"Edge Case - {case_name}", True, 
+                                           f"✅ Edge case handled correctly. Response: {len(main_response)} chars", data)
+                        results[case_name] = True
+                        
+                    else:
+                        error_text = await response.text()
+                        self.log_test_result(f"Edge Case - {case_name}", False, 
+                                           f"HTTP {response.status}: {error_text}")
+                        results[case_name] = False
+                        
+            except Exception as e:
+                self.log_test_result(f"Edge Case - {case_name}", False, f"Exception: {str(e)}")
+                results[case_name] = False
+        
+        return results
     
     def print_summary(self):
         """Print test summary"""
