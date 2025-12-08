@@ -16,7 +16,12 @@ code {
         monospace;
 }
 
-/* Custom Scrollbar for Textarea */
+/* Custom Scrollbar for Textarea - No borders */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
 }
@@ -28,6 +33,7 @@ code {
 .custom-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(156, 163, 175, 0.4);
     border-radius: 2px;
+    border: none;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
@@ -35,22 +41,30 @@ code {
 }
 
 /* Dark mode scrollbar */
+.dark .custom-scrollbar {
+    scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
+}
+
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(107, 114, 128, 0.4);
+    border: none;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(107, 114, 128, 0.7);
 }
 
-/* Firefox scrollbar */
-.custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+/* Prevent any focus artifacts */
+.custom-scrollbar:focus {
+    outline: none;
+    border: none;
+    box-shadow: none;
 }
 
-.dark .custom-scrollbar {
-    scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
+.custom-scrollbar:focus-visible {
+    outline: none;
+    border: none;
+    box-shadow: none;
 }
 
 
