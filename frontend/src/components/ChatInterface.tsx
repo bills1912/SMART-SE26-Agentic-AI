@@ -218,9 +218,9 @@ const ChatInterface: React.FC = () => {
         {/* Input Container - Claude/Emergent style tanpa status text */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
-            {/* Single Input Container - Seamless tanpa separator */}
+            {/* Single Input Container - Seamless tanpa separator, no focus artifacts */}
             <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
-              {/* Textarea Area - Bagian Atas */}
+              {/* Textarea Area - No borders, no transitions that show separator */}
               <div className="relative">
                 <textarea
                   ref={textareaRef}
@@ -228,17 +228,19 @@ const ChatInterface: React.FC = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Reply..."
-                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm custom-scrollbar focus:outline-none border-0"
+                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none text-sm custom-scrollbar focus:outline-none border-0 transition-none"
                   style={{ 
                     minHeight: '44px', 
-                    maxHeight: '120px'
+                    maxHeight: '120px',
+                    boxShadow: 'none',
+                    outline: 'none'
                   }}
                   disabled={isLoading}
                   rows={1}
                 />
               </div>
 
-              {/* Controls Row - Seamless blend tanpa separator */}
+              {/* Controls Row - Seamless blend, no hover/focus borders */}
               <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800">
                 {/* Left: Voice Recording Button */}
                 <div className="flex items-center">
