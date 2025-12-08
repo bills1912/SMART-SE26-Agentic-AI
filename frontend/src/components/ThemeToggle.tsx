@@ -47,19 +47,19 @@ const ThemeToggle: React.FC = () => {
   return (
     <button
       onClick={toggleTheme}
-      className="p-1 rounded border border-orange-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 hover:bg-orange-50 dark:hover:bg-gray-700 transition-all duration-200 group relative"
+      className="p-1.5 rounded border border-orange-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 hover:bg-orange-50 dark:hover:bg-gray-700 transition-all duration-200 group relative"
       aria-label={getNextThemeLabel()}
       title={getThemeLabel()}
     >
       {getThemeIcon()}
       
-      {/* System sync indicator - smaller */}
+      {/* System sync indicator */}
       {themeMode === 'system' && (
-        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 border border-white dark:border-gray-800 rounded-full"></div>
+        <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border border-white dark:border-gray-800 rounded-full"></div>
       )}
       
-      {/* Tooltip - Compact */}
-      <div className="absolute bottom-full mb-1 left-1/2 transform -translate-x-1/2 bg-gray-900 dark:bg-gray-700 text-white text-[10px] py-1 px-2 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-[9999]">
+      {/* Tooltip */}
+      <div className="absolute bottom-full mb-1.5 left-1/2 transform -translate-x-1/2 bg-gray-900 dark:bg-gray-700 text-white text-xs py-1 px-2 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-[9999]">
         {getThemeLabel()}
       </div>
     </button>
