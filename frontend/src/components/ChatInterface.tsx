@@ -151,27 +151,46 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-      {/* Chat Sidebar - Full when open */}
+      {/* Chat Sidebar - Overlay on mobile, fixed on desktop */}
       <ChatSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       
-      {/* Collapsed Sidebar - Icons only when sidebar closed */}
-      {!sidebarOpen && (
-        <CollapsedSidebar
-          onNewChat={createNewChat}
-          onShowHistory={() => setSidebarOpen(true)}
-          onExport={exportCurrentChat}
+      {/* Backdrop blur for mobile when sidebar open */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
+      )}
+      
+      {/* Collapsed Sidebar - Icons only when sidebar closed - DESKTOP ONLY */}
+      {!sidebarOpen && (
+        <div className="hidden lg:block">
+          <CollapsedSidebar
+            onNewChat={createNewChat}
+            onShowHistory={() => setSidebarOpen(true)}
+            onExport={exportCurrentChat}
+          />
+        </div>
       )}
       
       {/* Main Content - Claude-style FULL SCREEN SCROLL */}
       <div className={`flex-1 h-screen overflow-y-auto transition-all duration-300 ${
-        sidebarOpen ? 'ml-80' : 'ml-16'
+        sidebarOpen ? 'lg:ml-80' : 'lg:ml-16'
       }`}>
         {/* Compact Header - Balanced size */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1 sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div className="flex items-center justify-between">
-            {/* Left: Title */}
+            {/* Left: Mobile menu button + Title */}
             <div className="flex items-center gap-1.5">
+              {/* Mobile Menu Toggle Button */}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                aria-label="Toggle sidebar"
+              >
+                <Menu className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+              </button>
+              
               <div className="w-5 h-5 bg-gradient-to-br from-red-500 to-orange-600 rounded flex items-center justify-center">
                 <Bot className="h-2.5 w-2.5 text-white" />
               </div>
