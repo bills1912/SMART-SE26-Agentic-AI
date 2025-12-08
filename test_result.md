@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the comprehensive AI Policy & Insight Generator backend that includes core API endpoints, AI integration, MongoDB operations, web scraping, and visualization generation."
+user_problem_statement: "Test the AI Policy & Insight Generator with multilingual support and comprehensive authentication system (Emergent Google OAuth + Email/Password JWT). All users must login to access chat. Verify bug fixes: tooltip overflow and scrollable chat history."
 
 backend:
   - task: "Root API Endpoint"
