@@ -215,11 +215,12 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Ultra-Compact Input - MAXIMUM chat viewport dengan layout terpisah */}
+        {/* Input Container - Claude/Emergent style dengan separator internal */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
-            <div className="space-y-2">
-              {/* Textarea Area - Tanpa tombol di dalam dengan custom scrollbar */}
+            {/* Single Input Container dengan border dan rounded corners */}
+            <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden">
+              {/* Textarea Area - Bagian Atas */}
               <div className="relative">
                 <textarea
                   ref={textareaRef}
@@ -227,7 +228,7 @@ const ChatInterface: React.FC = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Reply..."
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-1 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm custom-scrollbar"
+                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-sm custom-scrollbar focus:outline-none border-0"
                   style={{ 
                     minHeight: '44px', 
                     maxHeight: '120px'
@@ -237,8 +238,11 @@ const ChatInterface: React.FC = () => {
                 />
               </div>
 
-              {/* Bottom Row - Controls terpisah */}
-              <div className="flex items-center justify-between">
+              {/* Separator Line - Internal divider */}
+              <div className="border-t border-gray-200 dark:border-gray-600"></div>
+
+              {/* Controls Row - Bagian Bawah */}
+              <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-750">
                 {/* Left: Voice Recording + Status */}
                 <div className="flex items-center gap-3">
                   {/* Voice Recording Button */}
@@ -270,11 +274,11 @@ const ChatInterface: React.FC = () => {
                     AI can make mistakes
                   </p>
                   
-                  {/* Send Button - Terpisah */}
+                  {/* Send Button */}
                   <button
                     onClick={handleSendMessage}
                     disabled={isLoading || !inputMessage.trim()}
-                    className="p-2.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    className="p-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                     title={isLoading ? "Analyzing..." : "Send message"}
                   >
                     {isLoading ? (
