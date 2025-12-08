@@ -142,26 +142,26 @@ const ChatInterface: React.FC = () => {
       {/* Sidebar Toggle Button */}
       <SidebarToggle isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'} p-3`}>
-        <div className="max-w-6xl mx-auto">
-          {/* Compact Header */}
-          <div className="mb-3 flex items-center justify-between">
-            {/* Left: Brand Logo */}
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center mr-3">
-                <Bot className="h-4 w-4 text-white" />
+      {/* Main Content - Claude-style full-width elegant layout */}
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${
+        sidebarOpen ? 'ml-80' : 'ml-0'
+      }`}>
+        <div className="max-w-4xl mx-auto w-full h-full flex flex-col px-6 py-4">
+          
+          {/* Elegant Header - Minimal & Clean */}
+          <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-6">
+            {/* Left: Title */}
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center">
+                <Bot className="h-3.5 w-3.5 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
-                  AI Policy & Insight Generator
-                </h1>
-                <p className="text-gray-500 dark:text-gray-400 text-xs">Real-time policy analysis</p>
-              </div>
+              <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
+                AI Policy & Insight Generator
+              </h1>
             </div>
             
-            {/* Right: Theme Toggle and User Menu */}
-            <div className="flex items-center gap-3">
+            {/* Right: Controls */}
+            <div className="flex items-center gap-2">
               <ThemeToggle />
               <UserMenu />
             </div>
