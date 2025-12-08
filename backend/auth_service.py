@@ -157,9 +157,9 @@ class AuthService:
             await self.db.users.insert_one(new_user)
             return User(**new_user)
 
-    async def create_session(self, user_id: str, response: Response) -> str:
+    async def create_session(self, user_id: str, response: Response, oauth_session_token: Optional[str] = None) -> str:
         """Create new session for user and set cookie"""
-        session_token = oauth_data.get("session_token") or self.generate_session_token()
+        session_token = oauth_session_token or self.generate_session_token()
         expires_at = datetime.now(timezone.utc) + timedelta(days=self.session_duration_days)
         
         # Store session in database
