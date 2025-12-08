@@ -157,21 +157,21 @@ const ChatInterface: React.FC = () => {
       <div className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
         sidebarOpen ? 'ml-80' : 'ml-16'
       }`}>
-        {/* SUPER Compact Header - 2x lebih sempit */}
-        <div className="border-b border-gray-200 dark:border-gray-700 px-2 py-0.5">
+        {/* Compact Header - Balanced size */}
+        <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1">
           <div className="flex items-center justify-between">
-            {/* Left: Title - Minimal */}
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 bg-gradient-to-br from-red-500 to-orange-600 rounded-sm flex items-center justify-center">
-                <Bot className="h-2 w-2 text-white" />
+            {/* Left: Title */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-5 h-5 bg-gradient-to-br from-red-500 to-orange-600 rounded flex items-center justify-center">
+                <Bot className="h-2.5 w-2.5 text-white" />
               </div>
-              <h1 className="text-xs font-medium text-gray-800 dark:text-white">
+              <h1 className="text-sm font-medium text-gray-800 dark:text-white">
                 AI Policy & Insight Generator
               </h1>
             </div>
             
-            {/* Right: Controls - Minimal */}
-            <div className="flex items-center gap-0.5">
+            {/* Right: Controls */}
+            <div className="flex items-center gap-1">
               <ThemeToggle />
               <UserMenu />
             </div>
