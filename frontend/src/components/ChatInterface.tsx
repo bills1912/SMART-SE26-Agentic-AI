@@ -192,9 +192,11 @@ const ChatInterface: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
           </div>
+        </div>
 
-          {/* Input Area - Claude-style elegant */}
-          <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4">
+        {/* Input Area - Claude-style elegant FULL WIDTH */}
+        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
+          <div className="max-w-5xl mx-auto px-8 py-6">
             <div className="relative">
               <textarea
                 ref={textareaRef}
@@ -202,15 +204,15 @@ const ChatInterface: React.FC = () => {
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Reply..."
-                className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none transition-all duration-200"
-                style={{ minHeight: '52px', maxHeight: '150px' }}
+                className="w-full px-5 py-4 pr-14 border border-gray-300 dark:border-gray-600 rounded-3xl focus:outline-none focus:ring-2 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all duration-200 text-base"
+                style={{ minHeight: '56px', maxHeight: '200px' }}
                 disabled={isLoading}
                 rows={1}
               />
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || !inputMessage.trim()}
-                className="absolute right-2 bottom-2 p-2.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-3 bottom-3 p-3 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                 title={isLoading ? "Analyzing..." : "Send message"}
               >
                 {isLoading ? (
@@ -221,28 +223,25 @@ const ChatInterface: React.FC = () => {
               </button>
             </div>
             
-            {/* AI Disclaimer - Claude-style */}
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-3">
-              AI Policy & Insight Generator can make mistakes. Please verify important information.
-            </p>
-          </div>
-
-          {/* Compact Status Bar */}
-          <div className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
-            <div className="flex items-center justify-center gap-3">
-              <div className="flex items-center gap-1">
-                <Database className="h-2.5 w-2.5" />
-                <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
-                  {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
-                </span>
+            {/* AI Disclaimer & Status - Claude-style */}
+            <div className="flex items-center justify-between mt-4 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <Database className="h-3 w-3" />
+                  <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
+                    {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                    {isBackendAvailable ? 'Connected' : 'Offline'}
+                  </span>
+                </div>
               </div>
-              <span>•</span>
-              <div className="flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
-                <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                  {isBackendAvailable ? 'Connected' : 'Offline'}
-                </span>
-              </div>
+              <p className="text-gray-500 dark:text-gray-400">
+                AI can make mistakes. Please verify important information.
+              </p>
             </div>
           </div>
         </div>
