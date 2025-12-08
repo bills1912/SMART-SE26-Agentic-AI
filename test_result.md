@@ -254,8 +254,8 @@ backend:
 
   - task: "User Authentication System - Emergent OAuth + JWT"
     implemented: true
-    working: false
-    file: "backend/auth_routes.py, frontend/src/pages/LoginPage.tsx"
+    working: true
+    file: "backend/auth_routes.py, frontend/src/pages/LoginPage.tsx, frontend/src/services/api.ts"
     stuck_count: 1
     priority: "high"
     needs_retesting: false
@@ -266,6 +266,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "🔍 COMPREHENSIVE AUTHENTICATION TESTING COMPLETED: ✅ Email/Password Registration: Works perfectly - user 'Frontend Test' created successfully, redirected to dashboard. ✅ Email/Password Login: Works perfectly - login successful, redirected to dashboard, user name visible in interface. ✅ Google OAuth Flow: Works correctly - redirects to auth.emergentagent.com with proper callback URL. ❌ CRITICAL ISSUE - Session Persistence Problem: Users get automatically logged out and redirected back to login page. Console shows 401 'Not authenticated' errors from /auth/me endpoint. This breaks the user experience as users cannot stay logged in. ❌ Cannot test logout functionality due to session persistence issue. Backend logs show successful login (200 status) but subsequent /auth/me calls return 401. Root cause: Session cookies not being properly set/maintained or session validation failing on backend."
+      - working: true
+        agent: "testing"
+        comment: "🎉 SESSION PERSISTENCE FIX VERIFIED SUCCESSFULLY! Comprehensive testing of withCredentials: true fix completed with 100% success rate. ✅ Email/Password Registration: User 'Test Fix User' created successfully, redirected to dashboard, STAYED logged in (no redirect loop). ✅ Session Persistence After Registration: User remained logged in for 3+ seconds without 401 errors. ✅ Page Refresh Test: User stayed logged in after page refresh, remained on /dashboard. ✅ Logout Functionality: Successfully logged out and redirected to /login. ✅ Login Functionality: Successfully logged in with test-fix@example.com, redirected to dashboard, STAYED logged in. ✅ Final Refresh Test: User remained logged in after final page refresh. ✅ No 401 Authentication Errors: Zero 401 errors found throughout entire test sequence. ✅ User Menu Visibility: User menu with 'Test Fix User' name consistently visible across all tests. CRITICAL FIX CONFIRMED: withCredentials: true in axios configuration (api.ts line 11) successfully enables session cookies to be sent with requests, resolving the session persistence issue completely."
 
 frontend:
   - task: "Theme Switcher Tooltip Overflow Fix"
