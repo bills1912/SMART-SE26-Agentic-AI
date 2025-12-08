@@ -294,6 +294,9 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "🐛 BUG FIX: Fixed chat history not scrollable. Restructured sidebar layout with flex-col on main container. Header and footer now flex-shrink-0 (fixed height), chat sessions list is flex-1 with overflow-y-auto and min-h-0 to enable proper scrolling. Previously, sidebar had no height constraint causing overflow to be ignored. User can now scroll through all historical chat sessions."
+      - working: "NA"
+        agent: "testing"
+        comment: "⏸️ TESTING BLOCKED: Cannot test chat history scrollable sidebar fix due to authentication session persistence issue. Users get automatically logged out and cannot access the dashboard where the chat sidebar is located. Need to fix authentication session persistence first before testing UI components."
 
   - task: "Initial Load & Welcome Message"
     implemented: true
