@@ -450,8 +450,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Theme Switcher Tooltip Overflow Fix"
-    - "Chat History Scrollable Sidebar"
+    - "Claude AI Centered Design Pattern Layout"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
