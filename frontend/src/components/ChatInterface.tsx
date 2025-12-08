@@ -191,9 +191,8 @@ const ChatInterface: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
-              <div ref={messagesEndRef} />
-            </div>
+            <div ref={messagesEndRef} />
+          </div>
 
           {/* Input Area - Claude-style elegant */}
           <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4">
