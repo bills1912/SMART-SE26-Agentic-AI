@@ -435,9 +435,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "User Authentication System - Emergent OAuth + JWT"
-  stuck_tasks:
-    - "User Authentication System - Emergent OAuth + JWT"
+    - "Theme Switcher Tooltip Overflow Fix"
+    - "Chat History Scrollable Sidebar"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
