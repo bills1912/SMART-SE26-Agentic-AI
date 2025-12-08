@@ -265,6 +265,30 @@ backend:
         comment: "🎯 IMPLEMENTED: Complete authentication system with dual methods: (1) Emergent Google OAuth using auth.emergentagent.com with dynamic redirect URL (window.location.origin), (2) Email/Password with JWT and bcrypt hashing. Backend: auth_routes.py (OAuth callback, register, login, /me, logout), auth_service.py (session management, password hashing, Emergent API integration), auth_models.py (User, UserSession, LoginRequest, RegisterRequest). Frontend: LoginPage.tsx, RegisterPage.tsx, AuthCallback.tsx (processes session_id from URL fragment), AuthContext.tsx (manages auth state with checkAuth delay optimization), ProtectedRoute.tsx (guards /dashboard). MongoDB stores users (with custom user_id UUID) and user_sessions (7-day expiry). All routes require login - no guest mode. Session tokens stored in httpOnly cookies. Added UserMenu component with logout. Follows Emergent Auth playbook guidelines. Needs testing: OAuth flow, email/password registration/login, session persistence, protected routes, logout functionality."
 
 frontend:
+  - task: "Theme Switcher Tooltip Overflow Fix"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ThemeToggle.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "🐛 BUG FIX: Fixed tooltip overflow issue where 'System mode (dark)' text was truncated to 'System mode (dar'. Added z-index: 9999, increased padding (py-2 px-3), added shadow-lg for better visibility. Tooltip now uses proper positioning to prevent cut-off. User reported this bug with screenshot showing incomplete tooltip text."
+
+  - task: "Chat History Scrollable Sidebar"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ChatSidebar.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "🐛 BUG FIX: Fixed chat history not scrollable. Restructured sidebar layout with flex-col on main container. Header and footer now flex-shrink-0 (fixed height), chat sessions list is flex-1 with overflow-y-auto and min-h-0 to enable proper scrolling. Previously, sidebar had no height constraint causing overflow to be ignored. User can now scroll through all historical chat sessions."
+
   - task: "Initial Load & Welcome Message"
     implemented: true
     working: true
