@@ -6,7 +6,6 @@ import { toast } from '../hooks/use-toast';
 import apiService from '../services/api';
 import ThemeToggle from './ThemeToggle';
 import ChatSidebar from './ChatSidebar';
-import SidebarToggle from './SidebarToggle';
 import CollapsedSidebar from './CollapsedSidebar';
 import UserMenu from './UserMenu';
 import { useChat } from '../contexts/ChatContext';
