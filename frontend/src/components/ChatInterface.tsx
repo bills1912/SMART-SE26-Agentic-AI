@@ -215,9 +215,9 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Input Container - Claude/Emergent style tanpa status text */}
+        {/* Input Container - FULL WIDTH tanpa blank space */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
-          <div className="max-w-5xl mx-auto px-4 py-2">
+          <div className="w-full px-8 py-2">
             {/* Single Input Container - Seamless tanpa separator, no focus artifacts */}
             <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
               {/* Textarea Area - No borders, no transitions that show separator */}
