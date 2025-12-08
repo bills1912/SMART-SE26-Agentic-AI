@@ -215,7 +215,7 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Input Container - Claude/Emergent style dengan separator internal */}
+        {/* Input Container - Claude/Emergent style tanpa status text */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
             {/* Single Input Container dengan border dan rounded corners + focus ring */}
@@ -241,40 +241,18 @@ const ChatInterface: React.FC = () => {
               {/* Separator Line - Internal divider */}
               <div className="border-t border-gray-200 dark:border-gray-600"></div>
 
-              {/* Controls Row - Bagian Bawah */}
+              {/* Controls Row - Hanya Voice dan Send Button */}
               <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-750">
-                {/* Left: Voice Recording + Status */}
-                <div className="flex items-center gap-3">
-                  {/* Voice Recording Button */}
+                {/* Left: Voice Recording Button */}
+                <div className="flex items-center">
                   <VoiceRecorder 
                     onTranscriptChange={handleVoiceTranscript}
                     disabled={isLoading}
                   />
-
-                  {/* Status Indicators - Compact */}
-                  <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-0.5">
-                      <Database className="h-2 w-2" />
-                      <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
-                        {scrapingStatus === 'in_progress' ? 'Gathering...' : 'Ready'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <div className={`w-1 h-1 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                        {isBackendAvailable ? 'Connected' : 'Offline'}
-                      </span>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Right: Send Button + Disclaimer */}
-                <div className="flex items-center gap-3">
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                    AI can make mistakes
-                  </p>
-                  
-                  {/* Send Button */}
+                {/* Right: Send Button */}
+                <div className="flex items-center">
                   <button
                     onClick={handleSendMessage}
                     disabled={isLoading || !inputMessage.trim()}
@@ -289,6 +267,30 @@ const ChatInterface: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Status Text - Terpisah di bawah input container */}
+            <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-gray-500 dark:text-gray-400">
+              {/* Left: Status Indicators */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Database className="h-2 w-2" />
+                  <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
+                    {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className={`w-1 h-1 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                    {isBackendAvailable ? 'Connected' : 'Offline'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: AI Disclaimer */}
+              <p className="text-gray-400 dark:text-gray-500">
+                AI can make mistakes. Please verify important information.
+              </p>
             </div>
           </div>
         </div>
