@@ -160,8 +160,11 @@ const ChatInterface: React.FC = () => {
               </div>
             </div>
             
-            {/* Right: Theme Toggle */}
-            <ThemeToggle />
+            {/* Right: Theme Toggle and User Menu */}
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <UserMenu />
+            </div>
           </div>
 
         {/* Chat Area - Maximum Height */}
