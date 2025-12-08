@@ -188,9 +188,9 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Messages Area - Narrow content, full width background */}
+        {/* Chat Messages Area - Full scroll with no gap */}
         <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-          <div className="max-w-3xl mx-auto px-4 py-3">
+          <div className="max-w-3xl mx-auto px-4 pt-3 pb-0">
             <div className="space-y-6">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
@@ -215,9 +215,9 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Input Container - Claude style: no border top, centered box only */}
-        <div className="flex-shrink-0">
-          <div className="max-w-3xl mx-auto px-4 py-4">
+        {/* Input Container - Claude style: wider than messages, no gap */}
+        <div className="flex-shrink-0 pb-4">
+          <div className="max-w-4xl mx-auto px-4">
             {/* Single Input Container - Seamless tanpa separator, no focus artifacts */}
             <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
               {/* Textarea Area - No borders, no transitions that show separator */}
