@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Bot, User, TrendingUp, FileText, Lightbulb } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
-import VisualizationComponent from './VisualizationComponent';
-import PolicyCard from './PolicyCard';
-import InsightCard from './InsightCard';
+import ContentButton from './ContentButton';
+import VisualizationModal from './VisualizationModal';
+import InsightsModal from './InsightsModal';
+import PolicyModal from './PolicyModal';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -11,6 +12,11 @@ interface MessageBubbleProps {
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isAI = message.sender === 'ai';
+  
+  // Modal states
+  const [isVizModalOpen, setIsVizModalOpen] = useState(false);
+  const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false);
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   
   const formatTime = (date: Date | string) => {
     try {
