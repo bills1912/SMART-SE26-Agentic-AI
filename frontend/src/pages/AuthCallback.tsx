@@ -28,15 +28,12 @@ const AuthCallback: React.FC = () => {
           // Set flag to skip delay in checkAuth
           sessionStorage.setItem('just_authenticated', 'true');
           
-          // Navigate to dashboard
-          navigate('/dashboard', {
-            replace: true,
-            state: { user: response.data.user }
-          });
+          // Force full page reload to /dashboard to ensure proper routing
+          window.location.href = '/dashboard';
         }
       } catch (error) {
         console.error('OAuth callback error:', error);
-        navigate('/login', { replace: true });
+        window.location.href = '/login';
       }
     };
 
