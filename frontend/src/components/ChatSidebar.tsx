@@ -165,8 +165,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
           )}
         </div>
 
-        {/* Footer Stats */}
-        <div className="p-4 border-t border-orange-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+        {/* Footer Stats - Fixed height section */}
+        <div className="flex-shrink-0 p-4 border-t border-orange-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
             <div className="flex justify-between">
               <span>Total Sessions:</span>
