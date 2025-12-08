@@ -7,6 +7,7 @@ import apiService from '../services/api';
 import ThemeToggle from './ThemeToggle';
 import ChatSidebar from './ChatSidebar';
 import CollapsedSidebar from './CollapsedSidebar';
+import VoiceRecorder from './VoiceRecorder';
 import UserMenu from './UserMenu';
 import { useChat } from '../contexts/ChatContext';
 
