@@ -103,6 +103,27 @@ class PolicyAPIService {
       return false;
     }
   }
+
+  // Generic HTTP methods for authentication and other uses
+  async get<T = any>(url: string, config?: any): Promise<{ data: T }> {
+    const response = await this.api.get<T>(url, config);
+    return response;
+  }
+
+  async post<T = any>(url: string, data?: any, config?: any): Promise<{ data: T }> {
+    const response = await this.api.post<T>(url, data, config);
+    return response;
+  }
+
+  async put<T = any>(url: string, data?: any, config?: any): Promise<{ data: T }> {
+    const response = await this.api.put<T>(url, data, config);
+    return response;
+  }
+
+  async delete<T = any>(url: string, config?: any): Promise<{ data: T }> {
+    const response = await this.api.delete<T>(url, config);
+    return response;
+  }
 }
 
 // Export singleton instance
