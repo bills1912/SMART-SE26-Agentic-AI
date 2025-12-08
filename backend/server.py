@@ -18,6 +18,7 @@ from models import (
 from database import PolicyDatabase
 from ai_analyzer import PolicyAIAnalyzer
 from web_scraper import PolicyDataScraper
+from auth_routes import router as auth_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
