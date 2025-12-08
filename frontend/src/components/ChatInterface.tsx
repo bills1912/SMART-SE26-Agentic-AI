@@ -178,10 +178,10 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Messages Area - Claude-style FULL WIDTH clean & spacious */}
+        {/* Chat Messages Area - MAXIMIZED viewport */}
         <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-          <div className="max-w-5xl mx-auto px-8 py-8">
-            <div className="space-y-10">
+          <div className="max-w-5xl mx-auto px-6 py-4">
+            <div className="space-y-8">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
