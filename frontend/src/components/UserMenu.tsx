@@ -28,24 +28,23 @@ const UserMenu: React.FC = () => {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors duration-200"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors duration-200"
       >
         {user.picture ? (
           <img
             src={user.picture}
             alt={user.name}
-            className="w-8 h-8 rounded-full border-2 border-orange-200 dark:border-gray-600"
+            className="w-5 h-5 rounded-full border border-orange-200 dark:border-gray-600"
           />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
-            <User className="h-4 w-4 text-white" />
+          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
+            <User className="h-2.5 w-2.5 text-white" />
           </div>
         )}
         <div className="hidden md:block text-left">
-          <p className="text-sm font-medium text-gray-800 dark:text-white">{user.name}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+          <p className="text-[10px] font-medium text-gray-800 dark:text-white leading-tight">{user.name}</p>
         </div>
-        <ChevronDown className={`h-4 w-4 text-gray-600 dark:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3 w-3 text-gray-600 dark:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
