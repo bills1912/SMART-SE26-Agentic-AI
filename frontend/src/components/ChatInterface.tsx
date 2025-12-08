@@ -146,9 +146,9 @@ const ChatInterface: React.FC = () => {
       <div className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
         sidebarOpen ? 'ml-80' : 'ml-0'
       }`}>
-        {/* Elegant Header - Full width with max-width container */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-5xl mx-auto px-8 py-4 flex items-center justify-between">
+        {/* Elegant Header - FULL WIDTH dari kiri ke kanan */}
+        <div className="border-b border-gray-200 dark:border-gray-700 px-8 py-4">
+          <div className="flex items-center justify-between">
             {/* Left: Title */}
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center">
