@@ -137,15 +137,24 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-      {/* Chat Sidebar */}
+      {/* Chat Sidebar - Full when open */}
       <ChatSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      
+      {/* Collapsed Sidebar - Icons only when sidebar closed */}
+      {!sidebarOpen && (
+        <CollapsedSidebar
+          onNewChat={createNewChat}
+          onShowHistory={() => setSidebarOpen(true)}
+          onExport={exportCurrentChat}
+        />
+      )}
       
       {/* Sidebar Toggle Button */}
       <SidebarToggle isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       
       {/* Main Content - Claude-style FULL WIDTH elegant layout */}
       <div className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
-        sidebarOpen ? 'ml-80' : 'ml-0'
+        sidebarOpen ? 'ml-80' : 'ml-16'
       }`}>
         {/* Elegant Header - FULL WIDTH dari kiri ke kanan */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-8 py-4">
