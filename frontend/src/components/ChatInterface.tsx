@@ -154,9 +154,6 @@ const ChatInterface: React.FC = () => {
         />
       )}
       
-      {/* Sidebar Toggle Button */}
-      <SidebarToggle isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-      
       {/* Main Content - Claude-style FULL WIDTH elegant layout */}
       <div className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
         sidebarOpen ? 'ml-80' : 'ml-16'
