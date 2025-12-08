@@ -146,7 +146,7 @@ const ChatInterface: React.FC = () => {
       <div className={`flex-1 flex flex-col transition-all duration-300 ${
         sidebarOpen ? 'ml-80' : 'ml-0'
       }`}>
-        <div className="max-w-4xl mx-auto w-full h-full flex flex-col px-6 py-4">
+        <div className="max-w-4xl mx-auto w-full h-screen flex flex-col px-6 py-4">
           
           {/* Elegant Header - Minimal & Clean */}
           <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-6">
@@ -167,31 +167,32 @@ const ChatInterface: React.FC = () => {
             </div>
           </div>
 
-        {/* Chat Messages Area - Claude-style clean & spacious */}
-        <div 
-          className="flex-1 overflow-y-auto mb-6"
-          style={{ minHeight: 0 }}
-        >
-          <div className="space-y-8 py-4">
-                {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
-                {isLoading && (
-                  <div className="flex items-center gap-3 p-4">
-                    <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-200">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>
-                        {scrapingStatus === 'in_progress' 
-                          ? 'Gathering latest policy data...' 
-                          : 'Analyzing policy scenario...'}
-                      </span>
-                    </div>
+          {/* Chat Messages Area - Claude-style clean & spacious */}
+          <div 
+            className="flex-1 overflow-y-auto mb-6"
+            style={{ minHeight: 0 }}
+          >
+            <div className="space-y-8 py-4">
+              {messages.map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+              {isLoading && (
+                <div className="flex items-center gap-3 p-4">
+                  <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-white" />
                   </div>
-                )}
-            <div ref={messagesEndRef} />
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-200">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>
+                      {scrapingStatus === 'in_progress' 
+                        ? 'Gathering latest policy data...' 
+                        : 'Analyzing policy scenario...'}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
           </div>
 
           {/* Input Area - Claude-style elegant */}
