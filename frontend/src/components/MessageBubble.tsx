@@ -58,51 +58,58 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           </div>
         </div>
 
-        {/* Visualizations */}
+        {/* Visualizations Button */}
         {message.visualizations && message.visualizations.length > 0 && (
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
-              <TrendingUp className="h-4 w-4" />
-              <span>Data Visualizations</span>
-            </div>
-            <div className="grid gap-4">
-              {message.visualizations.map((viz) => (
-                <VisualizationComponent key={viz.id} visualization={viz} />
-              ))}
-            </div>
-          </div>
+          <ContentButton
+            icon={TrendingUp}
+            title="Data Visualizations"
+            count={message.visualizations.length}
+            itemLabel="chart"
+            onClick={() => setIsVizModalOpen(true)}
+          />
         )}
 
-        {/* Insights */}
+        {/* Insights Button */}
         {message.insights && message.insights.length > 0 && (
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
-              <Lightbulb className="h-4 w-4" />
-              <span>Key Insights</span>
-            </div>
-            <div className="space-y-2">
-              {message.insights.map((insight, index) => (
-                <InsightCard key={index} insight={insight} />
-              ))}
-            </div>
-          </div>
+          <ContentButton
+            icon={Lightbulb}
+            title="Key Insights"
+            count={message.insights.length}
+            itemLabel="insight"
+            onClick={() => setIsInsightsModalOpen(true)}
+          />
         )}
 
-        {/* Policy Recommendations */}
+        {/* Policy Recommendations Button */}
         {message.policies && message.policies.length > 0 && (
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
-              <FileText className="h-4 w-4" />
-              <span>Policy Recommendations</span>
-            </div>
-            <div className="space-y-3">
-              {message.policies.map((policy) => (
-                <PolicyCard key={policy.id} policy={policy} />
-              ))}
-            </div>
-          </div>
+          <ContentButton
+            icon={FileText}
+            title="Policy Recommendations"
+            count={message.policies.length}
+            itemLabel="recommendation"
+            onClick={() => setIsPolicyModalOpen(true)}
+          />
         )}
       </div>
+
+      {/* Modals */}
+      <VisualizationModal
+        isOpen={isVizModalOpen}
+        onClose={() => setIsVizModalOpen(false)}
+        visualizations={message.visualizations || []}
+      />
+      
+      <InsightsModal
+        isOpen={isInsightsModalOpen}
+        onClose={() => setIsInsightsModalOpen(false)}
+        insights={message.insights || []}
+      />
+      
+      <PolicyModal
+        isOpen={isPolicyModalOpen}
+        onClose={() => setIsPolicyModalOpen(false)}
+        policies={message.policies || []}
+      />
     </div>
   );
 };
