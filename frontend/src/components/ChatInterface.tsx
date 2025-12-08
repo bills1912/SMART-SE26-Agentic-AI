@@ -228,24 +228,23 @@ const ChatInterface: React.FC = () => {
               AI Policy & Insight Generator can make mistakes. Please verify important information.
             </p>
           </div>
-        </div>
-      </div>
 
-        {/* Compact Status Bar */}
-        <div className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1">
-              <Database className="h-2.5 w-2.5" />
-              <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
-                {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
-              </span>
-            </div>
-            <span>•</span>
-            <div className="flex items-center gap-1">
-              <div className={`w-1.5 h-1.5 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                {isBackendAvailable ? 'Connected' : 'Offline'}
-              </span>
+          {/* Compact Status Bar */}
+          <div className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-center gap-3">
+              <div className="flex items-center gap-1">
+                <Database className="h-2.5 w-2.5" />
+                <span className={scrapingStatus === 'in_progress' ? 'text-orange-600 dark:text-orange-400' : ''}>
+                  {scrapingStatus === 'in_progress' ? 'Gathering data...' : 'Data ready'}
+                </span>
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${isBackendAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className={isBackendAvailable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                  {isBackendAvailable ? 'Connected' : 'Offline'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
