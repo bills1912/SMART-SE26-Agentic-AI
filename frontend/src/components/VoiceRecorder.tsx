@@ -119,22 +119,22 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onTranscriptChange, disab
     <button
       onClick={handleClick}
       disabled={disabled}
-      className={`p-2 rounded-full border transition-all duration-200 group relative ${
+      className={`p-1.5 rounded-md transition-all duration-200 group relative ${
         isRecording
-          ? 'border-red-300 bg-red-50 dark:border-red-600 dark:bg-red-900/20'
-          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+          ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       title={isRecording ? 'Stop recording' : 'Voice recording'}
     >
       {isRecording ? (
-        <Square className="h-4 w-4 text-red-600 dark:text-red-400" />
+        <Square className="h-4 w-4" />
       ) : (
-        <Mic className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+        <Mic className="h-4 w-4" />
       )}
 
       {/* Recording indicator */}
       {isRecording && (
-        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
       )}
 
       {/* Tooltip */}
