@@ -279,6 +279,9 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "🐛 BUG FIX: Fixed tooltip overflow issue where 'System mode (dark)' text was truncated to 'System mode (dar'. Added z-index: 9999, increased padding (py-2 px-3), added shadow-lg for better visibility. Tooltip now uses proper positioning to prevent cut-off. User reported this bug with screenshot showing incomplete tooltip text."
+      - working: "NA"
+        agent: "testing"
+        comment: "⏸️ TESTING BLOCKED: Cannot test tooltip overflow fix due to authentication session persistence issue. Users get automatically logged out and cannot access the dashboard where the theme toggle is located. Need to fix authentication session persistence first before testing UI components."
 
   - task: "Chat History Scrollable Sidebar"
     implemented: true
