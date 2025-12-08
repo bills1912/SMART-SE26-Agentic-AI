@@ -261,15 +261,10 @@ const ChatInterface: React.FC = () => {
                 {/* Left: Voice Recording + Status */}
                 <div className="flex items-center gap-3">
                   {/* Voice Recording Button */}
-                  <button
-                    className="p-2 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 group"
-                    title="Voice Recording"
-                  >
-                    <svg className="h-4 w-4 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                    </svg>
-                  </button>
+                  <VoiceRecorder 
+                    onTranscriptChange={handleVoiceTranscript}
+                    disabled={isLoading}
+                  />
 
                   {/* Status Indicators - Compact */}
                   <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
