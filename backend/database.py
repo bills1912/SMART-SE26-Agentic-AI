@@ -211,3 +211,17 @@ class PolicyDatabase:
         """Close database connection"""
         if self.client:
             self.client.close()
+
+
+# Dependency for FastAPI routes
+_db_instance = None
+
+async def get_database():
+    """Get database instance for dependency injection"""
+    global _db_instance
+    if _db_instance is None:
+        mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+        db_name = os.environ.get('DB_NAME', 'policy_db')
+        _db_instance = PolicyDatabase(mongo_url, db_name)
+        await _db_instance.init_collections()
+    return _db_instance.db
