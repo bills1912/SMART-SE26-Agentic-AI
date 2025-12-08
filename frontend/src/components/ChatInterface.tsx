@@ -195,37 +195,41 @@ const ChatInterface: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
-            <div className="border-t border-orange-200 dark:border-gray-700 p-4">
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <textarea
-                    ref={textareaRef}
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Describe your policy scenario or ask for analysis..."
-                    className="min-h-[60px] w-full resize-none border border-orange-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 rounded-md p-3 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 focus:outline-none"
-                    disabled={isLoading}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!inputMessage.trim() || isLoading}
-                    className="h-full px-4 py-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white shadow-lg transform transition-all duration-200 hover:scale-105 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
+          {/* Input Area - Claude-style elegant */}
+          <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Reply..."
+                className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 dark:focus:ring-orange-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none transition-all duration-200"
+                style={{ minHeight: '52px', maxHeight: '150px' }}
+                disabled={isLoading}
+                rows={1}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputMessage.trim()}
+                className="absolute right-2 bottom-2 p-2.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isLoading ? "Analyzing..." : "Send message"}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </button>
             </div>
+            
+            {/* AI Disclaimer - Claude-style */}
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-3">
+              AI Policy & Insight Generator can make mistakes. Please verify important information.
+            </p>
           </div>
         </div>
+      </div>
 
         {/* Compact Status Bar */}
         <div className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
