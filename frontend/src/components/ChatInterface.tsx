@@ -158,20 +158,20 @@ const ChatInterface: React.FC = () => {
         sidebarOpen ? 'ml-80' : 'ml-16'
       }`}>
         {/* Ultra-Compact Header - MAXIMUM chat viewport */}
-        <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-1.5">
+        <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1">
           <div className="flex items-center justify-between">
             {/* Left: Title */}
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-gradient-to-br from-red-500 to-orange-600 rounded-md flex items-center justify-center">
-                <Bot className="h-3 w-3 text-white" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-5 h-5 bg-gradient-to-br from-red-500 to-orange-600 rounded flex items-center justify-center">
+                <Bot className="h-2.5 w-2.5 text-white" />
               </div>
-              <h1 className="text-base font-semibold text-gray-800 dark:text-white">
+              <h1 className="text-sm font-semibold text-gray-800 dark:text-white">
                 AI Policy & Insight Generator
               </h1>
             </div>
             
             {/* Right: Controls */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <ThemeToggle />
               <UserMenu />
             </div>
