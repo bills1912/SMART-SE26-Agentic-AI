@@ -36,7 +36,7 @@ const LoginPage: React.FC = () => {
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <BrandLogo size="xl" showText={false} />
+            <BrandLogo size="lg" showText={false} />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
             AI Policy & Insight Generator
