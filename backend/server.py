@@ -286,8 +286,9 @@ async def trigger_data_scraping():
         scraping_in_progress = False
 
 
-# Include the router in the main app
+# Include the routers in the main app
 app.include_router(api_router)
+app.include_router(auth_router)
 
 # Add CORS middleware
 app.add_middleware(
