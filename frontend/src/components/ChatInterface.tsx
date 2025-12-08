@@ -218,8 +218,8 @@ const ChatInterface: React.FC = () => {
         {/* Input Container - Claude/Emergent style dengan separator internal */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
-            {/* Single Input Container dengan border dan rounded corners */}
-            <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden">
+            {/* Single Input Container dengan border dan rounded corners + focus ring */}
+            <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
               {/* Textarea Area - Bagian Atas */}
               <div className="relative">
                 <textarea
