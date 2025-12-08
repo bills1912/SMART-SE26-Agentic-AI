@@ -208,7 +208,7 @@ const ChatInterface: React.FC = () => {
         {/* Ultra-Compact Input - MAXIMUM chat viewport */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-5xl mx-auto px-4 py-2">
-            <div className="relative">
+            <div className="relative flex items-center">
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -223,7 +223,7 @@ const ChatInterface: React.FC = () => {
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || !inputMessage.trim()}
-                className="absolute right-1.5 bottom-1.5 p-1.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 title={isLoading ? "Analyzing..." : "Send message"}
               >
                 {isLoading ? (
