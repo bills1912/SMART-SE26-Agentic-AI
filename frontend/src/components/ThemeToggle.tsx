@@ -8,13 +8,13 @@ const ThemeToggle: React.FC = () => {
   const getThemeIcon = () => {
     switch (themeMode) {
       case 'light':
-        return <Sun className="h-3.5 w-3.5 text-orange-600" />;
+        return <Sun className="h-4 w-4 text-orange-600" />;
       case 'dark':
-        return <Moon className="h-3.5 w-3.5 text-orange-400" />;
+        return <Moon className="h-4 w-4 text-orange-400" />;
       case 'system':
-        return <Monitor className="h-3.5 w-3.5 text-orange-500" />;
+        return <Monitor className="h-4 w-4 text-orange-500" />;
       default:
-        return <Sun className="h-3.5 w-3.5 text-orange-600" />;
+        return <Sun className="h-4 w-4 text-orange-600" />;
     }
   };
 
