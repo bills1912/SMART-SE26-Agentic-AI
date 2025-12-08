@@ -766,11 +766,50 @@ async def main():
         # AI integration tests
         await tester.test_ai_integration()
         
+        # Multilingual language detection tests
+        print("\n" + "="*80)
+        print("MULTILINGUAL LANGUAGE DETECTION TESTING")
+        print("="*80)
+        
+        multilingual_results = await tester.test_multilingual_language_detection()
+        edge_case_results = await tester.test_multilingual_edge_cases()
+        
+        # Print multilingual test summary
+        print("\nMULTILINGUAL TEST RESULTS:")
+        print("-" * 40)
+        for language, success in multilingual_results.items():
+            status = "✅ PASS" if success else "❌ FAIL"
+            print(f"{status} - {language} Language Detection & Response")
+        
+        print("\nEDGE CASE TEST RESULTS:")
+        print("-" * 40)
+        for case, success in edge_case_results.items():
+            status = "✅ PASS" if success else "❌ FAIL"
+            print(f"{status} - {case}")
+        
         # Print summary
         passed, failed = tester.print_summary()
         
+        # Add multilingual test results to summary
+        multilingual_passed = sum(1 for success in multilingual_results.values() if success)
+        multilingual_failed = len(multilingual_results) - multilingual_passed
+        edge_passed = sum(1 for success in edge_case_results.values() if success)
+        edge_failed = len(edge_case_results) - edge_passed
+        
+        total_multilingual_tests = len(multilingual_results) + len(edge_case_results)
+        total_multilingual_passed = multilingual_passed + edge_passed
+        total_multilingual_failed = multilingual_failed + edge_failed
+        
+        print(f"\nMULTILINGUAL TESTING SUMMARY:")
+        print(f"Total Multilingual Tests: {total_multilingual_tests}")
+        print(f"Passed: {total_multilingual_passed} ✅")
+        print(f"Failed: {total_multilingual_failed} ❌")
+        if total_multilingual_tests > 0:
+            print(f"Multilingual Success Rate: {(total_multilingual_passed/total_multilingual_tests)*100:.1f}%")
+        
         # Return appropriate exit code
-        return 0 if failed == 0 else 1
+        total_failed = failed + total_multilingual_failed
+        return 0 if total_failed == 0 else 1
 
 if __name__ == "__main__":
     try:
