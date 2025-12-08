@@ -241,8 +241,8 @@ const ChatInterface: React.FC = () => {
               {/* Separator Line - Internal divider */}
               <div className="border-t border-gray-200 dark:border-gray-600"></div>
 
-              {/* Controls Row - Background sesuai tema container */}
-              <div className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-700">
+              {/* Controls Row - Background SAMA PERSIS dengan container */}
+              <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800">
                 {/* Left: Voice Recording Button */}
                 <div className="flex items-center">
                   <VoiceRecorder 
