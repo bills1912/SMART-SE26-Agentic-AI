@@ -22,29 +22,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   };
 
   return (
-    <div className={`flex gap-3 ${isAI ? 'flex-row' : 'flex-row-reverse'}`}>
-      {/* Avatar */}
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+    <div className={`flex gap-4 ${isAI ? 'flex-row' : 'flex-row-reverse'}`}>
+      {/* Avatar - Slightly larger for prominence */}
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
         isAI 
           ? 'bg-gradient-to-br from-red-500 to-orange-600' 
           : 'bg-gradient-to-br from-orange-400 to-red-500'
       }`}>
         {isAI ? (
-          <Bot className="h-5 w-5 text-white" />
+          <Bot className="h-4.5 w-4.5 text-white" />
         ) : (
-          <User className="h-5 w-5 text-white" />
+          <User className="h-4.5 w-4.5 text-white" />
         )}
       </div>
 
-      {/* Message Content */}
-      <div className={`flex-1 max-w-4xl ${isAI ? '' : 'flex flex-col items-end'}`}>
-        {/* Main Message */}
-        <div className={`p-4 rounded-xl border ${
+      {/* Message Content - Full width for better readability */}
+      <div className={`flex-1 ${isAI ? '' : 'flex flex-col items-end'}`}>
+        {/* Main Message - Removed borders for cleaner look */}
+        <div className={`${
           isAI 
-            ? 'bg-white dark:bg-gray-700 border-orange-200 dark:border-gray-600 shadow-md' 
-            : 'bg-gradient-to-r from-red-500 to-orange-600 text-white border-none shadow-lg'
+            ? 'bg-transparent' 
+            : 'bg-gradient-to-r from-red-500 to-orange-600 text-white px-5 py-3 rounded-2xl shadow-sm'
         }`}>
-          <div className={`whitespace-pre-wrap text-sm leading-relaxed ${isAI ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>
+          <div className={`whitespace-pre-wrap text-[15px] leading-relaxed ${isAI ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>
             {message.content}
           </div>
           <div className={`text-xs mt-2 ${isAI ? 'text-gray-500 dark:text-gray-400' : 'text-red-100'}`}>
