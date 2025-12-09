@@ -58,10 +58,10 @@ const ChatInterface: React.FC = () => {
 
   // Scroll to bottom when messages are added
   useEffect(() => {
-    if (messages.length > 0) {
+    if (realMessages.length > 0) {
       scrollToBottom();
     }
-  }, [messages.length]);
+  }, [realMessages.length]);
 
   useEffect(() => {
     // Check backend availability and get initial status
