@@ -96,29 +96,48 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const addMessageToCurrentSession = (message: ChatMessage) => {
     if (currentSession) {
-      const updatedSession = {
-        ...currentSession,
-        messages: [...currentSession.messages, message],
-        updated_at: new Date().toISOString()
-      };
-      
-      // Update session ID if it was empty (new session)
-      if (!currentSession.id && message.session_id) {
-        updatedSession.id = message.session_id;
-        updatedSession.title = generateSessionTitle(message.content);
-      }
-      
-      setCurrentSession(updatedSession);
+      setCurrentSession(prevSession => {
+        if (!prevSession) return prevSession;
+        
+        const updatedSession = {
+          ...prevSession,
+          messages: [...prevSession.messages, message],
+          updated_at: new Date().toISOString()
+        };
+        
+        // Update session ID if it was empty (new session)
+        if (!prevSession.id && message.session_id) {
+          updatedSession.id = message.session_id;
+          updatedSession.title = generateSessionTitle(message.content);
+        }
+        
+        return updatedSession;
+      });
       
       // Update sessions list
       setSessions(prevSessions => {
-        const existingIndex = prevSessions.findIndex(s => s.id === updatedSession.id);
+        const sessionId = currentSession.id || message.session_id;
+        if (!sessionId) return prevSessions;
+        
+        const existingIndex = prevSessions.findIndex(s => s.id === sessionId);
+        
+        const updatedSessionForList = {
+          ...currentSession,
+          id: sessionId,
+          messages: [...currentSession.messages, message],
+          updated_at: new Date().toISOString()
+        };
+        
+        if (!currentSession.id && message.session_id) {
+          updatedSessionForList.title = generateSessionTitle(message.content);
+        }
+        
         if (existingIndex >= 0) {
           const newSessions = [...prevSessions];
-          newSessions[existingIndex] = updatedSession;
+          newSessions[existingIndex] = updatedSessionForList;
           return newSessions;
         } else {
-          return [updatedSession, ...prevSessions];
+          return [updatedSessionForList, ...prevSessions];
         }
       });
     }
