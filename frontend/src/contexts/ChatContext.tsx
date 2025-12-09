@@ -45,16 +45,12 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       setSessions(chatSessions);
       
       // Always start with a new empty chat
-      // User can switch to old sessions from sidebar
-      if (!currentSession) {
-        createNewChat();
-      }
+      // This ensures welcome screen is shown on login or page load
+      createNewChat();
     } catch (error) {
       console.error('Failed to load chat history:', error);
       // Even on error, create a new chat
-      if (!currentSession) {
-        createNewChat();
-      }
+      createNewChat();
     } finally {
       setIsLoading(false);
     }
