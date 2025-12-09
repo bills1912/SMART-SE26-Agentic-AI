@@ -259,7 +259,7 @@ async def generate_report(session_id: str, format: str):
             raise HTTPException(status_code=400, detail="Format must be 'pdf' or 'docx'")
         
         # Get session data
-        session = await policy_db.get_session(session_id)
+        session = await policy_db.get_chat_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
