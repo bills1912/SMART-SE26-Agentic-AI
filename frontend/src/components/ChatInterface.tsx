@@ -90,6 +90,24 @@ const ChatInterface: React.FC = () => {
       console.error('Backend not available:', error);
     }
   };
+  
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    // Update message in current session
+    if (currentSession) {
+      const updatedMessages = currentSession.messages.map(msg => 
+        msg.id === messageId ? { ...msg, content: newContent } : msg
+      );
+      
+      const updatedSession = {
+        ...currentSession,
+        messages: updatedMessages
+      };
+      
+      // Here you could also call API to update on backend if needed
+      // For now, just update local state
+      console.log('Message edited:', messageId, newContent);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading || !currentSession) return;
