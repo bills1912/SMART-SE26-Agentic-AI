@@ -56,10 +56,18 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  // Scroll to bottom when messages are added
+  // Scroll management for messages
   useEffect(() => {
     if (realMessages.length > 0) {
-      scrollToBottom();
+      // For first 2 messages (user + AI response), scroll to top
+      if (realMessages.length <= 2) {
+        setTimeout(() => {
+          scrollToTop();
+        }, 300); // Delay untuk smooth transition
+      } else {
+        // For subsequent messages, scroll to bottom
+        scrollToBottom();
+      }
     }
   }, [realMessages.length]);
 
