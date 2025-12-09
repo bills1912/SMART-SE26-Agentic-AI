@@ -236,7 +236,7 @@ const ChatInterface: React.FC = () => {
           <div className="min-h-full animate-in slide-in-from-bottom duration-500">
             <div className="max-w-3xl mx-auto px-4 pt-3">
               <div className="space-y-6">
-                {messages.map((message) => (
+                {realMessages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isLoading && (
