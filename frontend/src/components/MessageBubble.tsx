@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, User, TrendingUp, FileText, Lightbulb } from 'lucide-react';
+import { Bot, User, TrendingUp, FileText, Lightbulb, Copy, Edit2, Check } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
 import ContentButton from './ContentButton';
 import VisualizationModal from './VisualizationModal';
@@ -8,15 +8,21 @@ import PolicyModal from './PolicyModal';
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  onEdit?: (messageId: string, newContent: string) => void;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit }) => {
   const isAI = message.sender === 'ai';
   
   // Modal states
   const [isVizModalOpen, setIsVizModalOpen] = useState(false);
   const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  
+  // Copy & Edit states
+  const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(message.content);
   
   const formatTime = (date: Date | string) => {
     try {
@@ -25,6 +31,26 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     } catch (error) {
       return 'Unknown time';
     }
+  };
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  const handleEdit = () => {
+    if (isEditing && onEdit) {
+      onEdit(message.id, editedContent);
+      setIsEditing(false);
+    } else {
+      setIsEditing(true);
+    }
+  };
+  
+  const handleCancelEdit = () => {
+    setEditedContent(message.content);
+    setIsEditing(false);
   };
 
   return (
