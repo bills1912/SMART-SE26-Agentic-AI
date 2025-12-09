@@ -291,8 +291,6 @@ Would you like me to:
         
         You are helpful and informative about Indonesian Economic Census while being honest about data limitations.
         """
-        You are honest about limitations and scope boundaries rather than providing speculative or out-of-scope analysis.
-        """
 
     def _detect_language(self, text: str) -> str:
         """Detect the language of user input using langdetect library"""
