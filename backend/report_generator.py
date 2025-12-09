@@ -188,7 +188,68 @@ class ReportGenerator:
         buffer.seek(0)
         return buffer
     
-    def generate_docx(self, session_data: dict) -> BytesIO:
+    def generate_docx(self, session) -> BytesIO:
+        """Generate Word document from session data"""
+        doc = Document()
+        
+        # Title
+        title = doc.add_heading('Laporan Analisis Sensus Ekonomi Indonesia', 0)
+        title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        title.runs[0].font.color.rgb = RGBColor(220, 38, 38)
+        
+        # Metadata
+        date_str = datetime.now().strftime("%d %B %Y, %H:%M WIB")
+        meta = doc.add_paragraph()
+        meta.add_run('Tanggal Pembuatan: ').bold = True
+        meta.add_run(date_str)
+        doc.add_paragraph()
+        
+        # Session Title
+        session_title = getattr(session, 'title', 'Analisis Sensus')
+        topic = doc.add_paragraph()
+        topic.add_run('Topik: ').bold = True
+        topic.add_run(session_title)
+        topic.runs[0].font.color.rgb = RGBColor(234, 88, 12)
+        doc.add_paragraph()
+        
+        # Messages
+        messages = getattr(session, 'messages', [])
+        for msg in messages:
+            sender = "Pengguna" if getattr(msg, 'sender', 'user') == 'user' else "AI Asisten"
+            
+            # Sender header
+            sender_heading = doc.add_heading(sender, level=2)
+            sender_heading.runs[0].font.color.rgb = RGBColor(234, 88, 12)
+            
+            # Message content
+            content = getattr(msg, 'content', '')
+            doc.add_paragraph(content)
+            
+            # Add insights
+            insights = getattr(msg, 'insights', None)
+            if insights:
+                insights_heading = doc.add_heading('Key Insights:', level=3)
+                for insight in insights:
+                    p = doc.add_paragraph(insight, style='List Bullet')
+            
+            # Add policies
+            policies = getattr(msg, 'policies', None)
+            if policies:
+                policies_heading = doc.add_heading('Rekomendasi Kebijakan:', level=3)
+                for policy in policies:
+                    policy_title = getattr(policy, 'title', 'Untitled')
+                    doc.add_paragraph(policy_title, style='List Number')
+                    policy_desc = getattr(policy, 'description', '')
+                    doc.add_paragraph(policy_desc)
+                    doc.add_paragraph()
+            
+            doc.add_paragraph()
+        
+        # Save to buffer
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        return buffer
         """Generate Word document from session data"""
         doc = Document()
         
