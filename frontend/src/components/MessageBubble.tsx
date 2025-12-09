@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Bot, User, TrendingUp, FileText, Lightbulb, Copy, Edit2, Check } from 'lucide-react';
+import { Bot, User, TrendingUp, FileText, Lightbulb, Copy, Edit2, Check, Download } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
 import ContentButton from './ContentButton';
 import VisualizationModal from './VisualizationModal';
 import InsightsModal from './InsightsModal';
 import PolicyModal from './PolicyModal';
+import ReportModal from './ReportModal';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -18,6 +19,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit }) => {
   const [isVizModalOpen, setIsVizModalOpen] = useState(false);
   const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   
   // Copy & Edit states
   const [copied, setCopied] = useState(false);
