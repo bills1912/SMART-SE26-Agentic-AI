@@ -16,7 +16,95 @@ logger = logging.getLogger(__name__)
 class ReportGenerator:
     """Generate PDF and Word reports from analysis data"""
     
-    def generate_pdf(self, session_data: dict) -> BytesIO:
+    def generate_pdf(self, session) -> BytesIO:
+        """Generate PDF report from session data"""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+                               rightMargin=72, leftMargin=72,
+                               topMargin=72, bottomMargin=18)
+        
+        # Container for the 'Flowable' objects
+        elements = []
+        
+        # Define styles
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(name='CustomTitle',
+                                 parent=styles['Heading1'],
+                                 fontSize=24,
+                                 textColor='#DC2626',
+                                 spaceAfter=30,
+                                 alignment=TA_CENTER))
+        
+        styles.add(ParagraphStyle(name='CustomHeading',
+                                 parent=styles['Heading2'],
+                                 fontSize=16,
+                                 textColor='#EA580C',
+                                 spaceAfter=12,
+                                 spaceBefore=12))
+        
+        # Title
+        title = Paragraph("Laporan Analisis Sensus Ekonomi Indonesia", styles['CustomTitle'])
+        elements.append(title)
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Metadata
+        date_str = datetime.now().strftime("%d %B %Y, %H:%M WIB")
+        meta = Paragraph(f"<b>Tanggal Pembuatan:</b> {date_str}", styles['Normal'])
+        elements.append(meta)
+        elements.append(Spacer(1, 0.3*inch))
+        
+        # Session Title
+        session_title = getattr(session, 'title', 'Analisis Sensus')
+        title_para = Paragraph(f"<b>Topik:</b> {session_title}", styles['CustomHeading'])
+        elements.append(title_para)
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Messages
+        messages = getattr(session, 'messages', [])
+        for msg in messages:
+            sender = "Pengguna" if getattr(msg, 'sender', 'user') == 'user' else "AI Asisten"
+            
+            # Sender header
+            sender_para = Paragraph(f"<b>{sender}:</b>", styles['CustomHeading'])
+            elements.append(sender_para)
+            
+            # Message content
+            content = getattr(msg, 'content', '').replace('\n', '<br/>')
+            content_para = Paragraph(content, styles['BodyText'])
+            elements.append(content_para)
+            elements.append(Spacer(1, 0.2*inch))
+            
+            # Add insights if available
+            insights = getattr(msg, 'insights', None)
+            if insights:
+                insights_title = Paragraph("<b>Key Insights:</b>", styles['Heading3'])
+                elements.append(insights_title)
+                for insight in insights:
+                    insight_para = Paragraph(f"• {insight}", styles['Normal'])
+                    elements.append(insight_para)
+                elements.append(Spacer(1, 0.2*inch))
+            
+            # Add policies if available
+            policies = getattr(msg, 'policies', None)
+            if policies:
+                policies_title = Paragraph("<b>Rekomendasi Kebijakan:</b>", styles['Heading3'])
+                elements.append(policies_title)
+                for policy in policies:
+                    policy_title_text = getattr(policy, 'title', 'Untitled')
+                    policy_title = Paragraph(f"<b>{policy_title_text}</b>", styles['Normal'])
+                    elements.append(policy_title)
+                    policy_desc = getattr(policy, 'description', '')
+                    policy_desc_para = Paragraph(policy_desc, styles['Normal'])
+                    elements.append(policy_desc_para)
+                    elements.append(Spacer(1, 0.1*inch))
+                elements.append(Spacer(1, 0.2*inch))
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer
+    
+    def generate_docx(self, session) -> BytesIO:
         """Generate PDF report from session data"""
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4,
