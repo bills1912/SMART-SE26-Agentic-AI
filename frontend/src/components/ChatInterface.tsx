@@ -263,7 +263,7 @@ const ChatInterface: React.FC = () => {
         {/* Input Container - Centered for new chat, bottom for normal chat */}
         <div className={`sticky bottom-0 pb-4 transition-all duration-500 ${
           isNewChat 
-            ? 'bg-transparent pt-0' 
+            ? 'bg-transparent -mt-8' 
             : 'bg-gradient-to-t from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4'
         }`}>
           <div className={`mx-auto px-4 transition-all duration-500 ${
