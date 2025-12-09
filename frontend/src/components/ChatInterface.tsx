@@ -39,6 +39,9 @@ const ChatInterface: React.FC = () => {
 
   // Get messages from current session
   const messages = currentSession?.messages || [];
+  
+  // Check if this is a new empty chat (no messages)
+  const isNewChat = messages.length === 0;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,29 +53,12 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  // Scroll to bottom when NEW messages are added (user sends, AI responds)
+  // Scroll to bottom when messages are added
   useEffect(() => {
-    // Only scroll to bottom if there's more than 1 message (not just welcome message)
-    if (messages.length > 1) {
+    if (messages.length > 0) {
       scrollToBottom();
     }
   }, [messages.length]);
-
-  // Scroll to TOP when new session is created (to show welcome message)
-  useEffect(() => {
-    if (currentSession) {
-      // Check if this is a new chat (only has 1 welcome message)
-      const isNewChat = currentSession.messages.length === 1 && 
-                        currentSession.messages[0]?.id?.startsWith('welcome_');
-      
-      if (isNewChat) {
-        // For new chat, scroll to top to show welcome message
-        setTimeout(() => {
-          scrollToTop();
-        }, 100);
-      }
-    }
-  }, [currentSession?.id]);
 
   useEffect(() => {
     // Check backend availability and get initial status
