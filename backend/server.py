@@ -40,6 +40,9 @@ policy_db = PolicyDatabase(mongo_url, db_name)
 # Initialize AI analyzer
 ai_analyzer = PolicyAIAnalyzer()
 
+# Initialize report generator
+report_generator = ReportGenerator()
+
 # Create the main app
 app = FastAPI(title="AI Policy & Insight Generator", version="1.0.0")
 
