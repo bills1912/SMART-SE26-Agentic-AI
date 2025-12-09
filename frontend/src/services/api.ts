@@ -94,6 +94,13 @@ class PolicyAPIService {
     const response = await this.api.get('/stats');
     return response.data;
   }
+  
+  async generateReport(sessionId: string, format: 'pdf' | 'docx') {
+    const response = await this.api.get(`/report/${sessionId}/${format}`, {
+      responseType: 'blob'
+    });
+    return response;
+  }
 
   // Utility method to check if backend is available
   async isBackendAvailable(): Promise<boolean> {
