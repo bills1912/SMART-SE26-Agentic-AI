@@ -265,7 +265,11 @@ const ChatInterface: React.FC = () => {
             <div className="max-w-3xl mx-auto px-4 pt-3">
               <div className="space-y-6">
                 {realMessages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+                  <MessageBubble 
+                    key={message.id} 
+                    message={message}
+                    onEdit={handleEditMessage}
+                  />
                 ))}
                 {isLoading && (
                   <div className="flex items-center gap-3 p-4">
