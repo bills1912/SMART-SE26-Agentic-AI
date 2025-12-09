@@ -58,28 +58,26 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   };
 
   const createNewChat = () => {
+    // Add welcome message to new session
+    const welcomeMessage: ChatMessage = {
+      id: 'welcome_' + Date.now(),
+      session_id: '',
+      sender: 'ai',
+      content: 'Halo! Saya adalah Asisten AI untuk Sensus Ekonomi Indonesia. Saya dapat membantu Anda menganalisis data sensus ekonomi, memberikan insights tentang perekonomian Indonesia, menjelaskan metodologi sensus, dan memberikan informasi tentang publikasi hasil sensus. Ada yang bisa saya bantu terkait Sensus Ekonomi Indonesia hari ini?',
+      timestamp: new Date(),
+    };
+    
     // Create a new local session - it will be created on backend when first message is sent
     const newSession: ChatSession = {
       id: '',
-      title: 'New Policy Analysis',
-      messages: [],
+      title: 'Analisis Sensus Baru',
+      messages: [welcomeMessage],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       metadata: {}
     };
     
     setCurrentSession(newSession);
-    
-    // Add welcome message to new session
-    const welcomeMessage: ChatMessage = {
-      id: 'welcome_' + Date.now(),
-      session_id: '',
-      sender: 'ai',
-      content: 'Hello! I\'m your AI Policy Analyst. I can help you analyze policy scenarios, generate insights, and create visualizations using real-time data from government, economic, news, and academic sources. What policy area would you like to explore today?',
-      timestamp: new Date(),
-    };
-    
-    newSession.messages = [welcomeMessage];
   };
 
   const switchToSession = async (sessionId: string) => {
