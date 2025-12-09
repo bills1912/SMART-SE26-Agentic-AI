@@ -224,36 +224,48 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Messages Area - Claude style: entire page scrolls */}
-        <div className="min-h-full">
-          <div className="max-w-3xl mx-auto px-4 pt-3">
-            <div className="space-y-6">
-              {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))}
-              {isLoading && (
-                <div className="flex items-center gap-3 p-4">
-                  <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-white" />
+        {/* Chat Messages Area - Claude style: entire page scrolls OR Welcome Screen */}
+        {isNewChat ? (
+          /* New Chat Welcome Screen - Centered */
+          <NewChatWelcome />
+        ) : (
+          /* Normal Chat Messages */
+          <div className="min-h-full animate-in slide-in-from-bottom duration-500">
+            <div className="max-w-3xl mx-auto px-4 pt-3">
+              <div className="space-y-6">
+                {messages.map((message) => (
+                  <MessageBubble key={message.id} message={message} />
+                ))}
+                {isLoading && (
+                  <div className="flex items-center gap-3 p-4">
+                    <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-200">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>
+                        {scrapingStatus === 'in_progress' 
+                          ? 'Mengumpulkan data sensus terbaru...' 
+                          : 'Menganalisis pertanyaan Anda...'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-200">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>
-                      {scrapingStatus === 'in_progress' 
-                        ? 'Gathering latest policy data...' 
-                        : 'Analyzing policy scenario...'}
-                    </span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+                )}
+                <div ref={messagesEndRef} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Input Container - Claude style: sticky at bottom when scrolling */}
-        <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4 pb-4">
-          <div className="max-w-4xl mx-auto px-4">
+        {/* Input Container - Centered for new chat, bottom for normal chat */}
+        <div className={`sticky bottom-0 pt-4 pb-4 transition-all duration-500 ${
+          isNewChat 
+            ? 'bg-transparent' 
+            : 'bg-gradient-to-t from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent'
+        }`}>
+          <div className={`mx-auto px-4 transition-all duration-500 ${
+            isNewChat ? 'max-w-2xl' : 'max-w-4xl'
+          }`}>
             {/* Single Input Container - Seamless tanpa separator, no focus artifacts */}
             <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
               {/* Textarea Area - No borders, no transitions that show separator */}
