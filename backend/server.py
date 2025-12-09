@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
@@ -19,6 +20,7 @@ from database import PolicyDatabase
 from ai_analyzer import PolicyAIAnalyzer
 from web_scraper import PolicyDataScraper
 from auth_routes import router as auth_router
+from report_generator import ReportGenerator
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
