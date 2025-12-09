@@ -58,20 +58,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   };
 
   const createNewChat = () => {
-    // Add welcome message to new session
-    const welcomeMessage: ChatMessage = {
-      id: 'welcome_' + Date.now(),
-      session_id: '',
-      sender: 'ai',
-      content: 'Halo! Saya adalah Asisten AI untuk Sensus Ekonomi Indonesia. Saya dapat membantu Anda menganalisis data sensus ekonomi, memberikan insights tentang perekonomian Indonesia, menjelaskan metodologi sensus, dan memberikan informasi tentang publikasi hasil sensus. Ada yang bisa saya bantu terkait Sensus Ekonomi Indonesia hari ini?',
-      timestamp: new Date(),
-    };
-    
-    // Create a new local session - it will be created on backend when first message is sent
+    // Create a new local session without welcome message - it will be created on backend when first message is sent
     const newSession: ChatSession = {
       id: '',
       title: 'Analisis Sensus Baru',
-      messages: [welcomeMessage],
+      messages: [], // Empty - no welcome message
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       metadata: {}
