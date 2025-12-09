@@ -181,6 +181,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit }) => {
             onClick={() => setIsPolicyModalOpen(true)}
           />
         )}
+        
+        {/* Report Download Button - Only for AI messages with analysis */}
+        {isAI && message.session_id && (message.visualizations?.length || message.insights?.length || message.policies?.length) && (
+          <ContentButton
+            icon={Download}
+            title="Unduh Laporan Lengkap"
+            count={1}
+            itemLabel="report"
+            onClick={() => setIsReportModalOpen(true)}
+          />
+        )}
       </div>
 
       {/* Modals */}
@@ -200,6 +211,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit }) => {
         isOpen={isPolicyModalOpen}
         onClose={() => setIsPolicyModalOpen(false)}
         policies={message.policies || []}
+      />
+      
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        sessionId={message.session_id}
+        messageContent={message.content}
       />
     </div>
   );
