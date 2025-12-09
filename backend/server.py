@@ -251,6 +251,41 @@ async def get_stats():
         raise HTTPException(status_code=500, detail="Error getting statistics")
 
 
+@api_router.get("/report/{session_id}/{format}")
+async def generate_report(session_id: str, format: str):
+    """Generate and download report in PDF or DOCX format"""
+    try:
+        if format not in ['pdf', 'docx']:
+            raise HTTPException(status_code=400, detail="Format must be 'pdf' or 'docx'")
+        
+        # Get session data
+        session = await policy_db.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Generate report
+        if format == 'pdf':
+            buffer = report_generator.generate_pdf(session)
+            media_type = 'application/pdf'
+            filename = f"Laporan_Sensus_{session_id[:8]}.pdf"
+        else:
+            buffer = report_generator.generate_docx(session)
+            media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            filename = f"Laporan_Sensus_{session_id[:8]}.docx"
+        
+        return StreamingResponse(
+            buffer,
+            media_type=media_type,
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+
+
+
 # Background task functions
 async def trigger_data_scraping():
     """Background task to collect real data from reliable sources"""
