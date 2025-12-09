@@ -17,7 +17,7 @@ const NewChatWelcome: React.FC<NewChatWelcomeProps> = () => {
             </div>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
               Asisten Sensus Ekonomi Indonesia
             </h1>
