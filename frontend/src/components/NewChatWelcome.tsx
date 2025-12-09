@@ -8,7 +8,7 @@ interface NewChatWelcomeProps {
 const NewChatWelcome: React.FC<NewChatWelcomeProps> = () => {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-12">
-      <div className="max-w-3xl w-full text-center space-y-8">
+      <div className="max-w-3xl w-full text-center space-y-5">
         {/* Icon & Greeting - More spacing from top */}
         <div className="space-y-6">
           <div className="flex justify-center">
