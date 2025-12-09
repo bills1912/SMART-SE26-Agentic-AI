@@ -237,11 +237,13 @@ const ChatInterface: React.FC = () => {
 
         {/* Chat Messages Area - Claude style: entire page scrolls OR Welcome Screen */}
         {isNewChat ? (
-          /* New Chat Welcome Screen - Centered */
-          <NewChatWelcome />
+          /* New Chat Welcome Screen - Centered with fade out transition */
+          <div className="transition-all duration-700 ease-out">
+            <NewChatWelcome />
+          </div>
         ) : (
-          /* Normal Chat Messages */
-          <div className="min-h-full animate-in slide-in-from-bottom duration-500">
+          /* Normal Chat Messages - Fade in smoothly */
+          <div className="min-h-full transition-all duration-700 ease-in opacity-100">
             <div className="max-w-3xl mx-auto px-4 pt-3">
               <div className="space-y-6">
                 {realMessages.map((message) => (
