@@ -44,14 +44,17 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       const chatSessions = await apiService.getSessions();
       setSessions(chatSessions);
       
-      // If no current session, create a new one or load the most recent
-      if (!currentSession && chatSessions.length > 0) {
-        const latestSession = chatSessions[0];
-        const fullSession = await apiService.getSession(latestSession.id);
-        setCurrentSession(fullSession);
+      // Always start with a new empty chat
+      // User can switch to old sessions from sidebar
+      if (!currentSession) {
+        createNewChat();
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
+      // Even on error, create a new chat
+      if (!currentSession) {
+        createNewChat();
+      }
     } finally {
       setIsLoading(false);
     }
