@@ -44,7 +44,9 @@ const ChatInterface: React.FC = () => {
   };
   
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (mainContainerRef.current) {
+      mainContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   // Scroll to bottom when NEW messages are added (user sends, AI responds)
