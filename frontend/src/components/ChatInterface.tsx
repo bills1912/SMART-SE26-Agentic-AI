@@ -42,9 +42,20 @@ const ChatInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Scroll to bottom when session changes (for new chat)
+  useEffect(() => {
+    if (currentSession) {
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [currentSession?.id]);
 
   useEffect(() => {
     // Check backend availability and get initial status
