@@ -10,7 +10,7 @@ const NewChatWelcome: React.FC<NewChatWelcomeProps> = () => {
     <div className="flex-1 flex items-center justify-center px-4 py-12">
       <div className="max-w-3xl w-full text-center space-y-2.5">
         {/* Icon & Greeting - More spacing from top */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex justify-center">
             <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
               <Sparkles className="h-8 w-8 text-white" />
