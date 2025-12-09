@@ -25,6 +25,7 @@ const ChatInterface: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mainContainerRef = useRef<HTMLDivElement>(null);
 
   // Handle voice transcript
   const handleVoiceTranscript = (transcript: string) => {
