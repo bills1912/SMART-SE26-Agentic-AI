@@ -40,8 +40,15 @@ const ChatInterface: React.FC = () => {
   // Get messages from current session
   const messages = currentSession?.messages || [];
   
-  // Check if this is a new empty chat (no messages)
-  const isNewChat = messages.length === 0;
+  // Check if this is a new empty chat (no messages and session exists)
+  const isNewChat = currentSession && messages.length === 0;
+
+  // Debug log
+  useEffect(() => {
+    console.log('Current session:', currentSession);
+    console.log('Messages length:', messages.length);
+    console.log('Is new chat:', isNewChat);
+  }, [currentSession, messages.length, isNewChat]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
