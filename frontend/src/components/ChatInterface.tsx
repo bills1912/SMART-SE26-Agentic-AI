@@ -9,6 +9,7 @@ import ChatSidebar from './ChatSidebar';
 import CollapsedSidebar from './CollapsedSidebar';
 import VoiceRecorder from './VoiceRecorder';
 import UserMenu from './UserMenu';
+import NewChatWelcome from './NewChatWelcome';
 import { useChat } from '../contexts/ChatContext';
 
 const ChatInterface: React.FC = () => {
