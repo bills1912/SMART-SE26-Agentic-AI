@@ -201,9 +201,12 @@ const ChatInterface: React.FC = () => {
       )}
       
       {/* Main Content - Claude-style FULL SCREEN SCROLL */}
-      <div className={`flex-1 h-screen overflow-y-auto transition-all duration-300 ${
-        sidebarOpen ? 'lg:ml-80' : 'lg:ml-16'
-      }`}>
+      <div 
+        ref={mainContainerRef}
+        className={`flex-1 h-screen overflow-y-auto transition-all duration-300 ${
+          sidebarOpen ? 'lg:ml-80' : 'lg:ml-16'
+        }`}
+      >
         {/* Compact Header - Balanced size */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1 sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div className="flex items-center justify-between">
