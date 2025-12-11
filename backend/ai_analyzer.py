@@ -1,24 +1,13 @@
 import os
-import asyncio
-from typing import List, Dict, Any, Optional
-# GANTI: Menggunakan library Google Generative AI
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-from models import (
-    ScrapedData, PolicyInsight, PolicyRecommendation, 
-    VisualizationConfig, PolicyCategory, ChatMessage, QueryIntent
-)
+import logging
+from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
+import google.generativeai as genai
 from data_agent import DataRetrievalAgent, AnalysisAgent
 from visualization_agent import VisualizationAgent
 from insight_agent import InsightGenerationAgent
+from models import QueryIntent
 import json
-import logging
-from datetime import datetime
-from langdetect import detect, DetectorFactory
-
-# Set seed for consistent language detection results
-DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
 
@@ -142,27 +131,30 @@ class PolicyAnalyzer:
                 raw_data = await self.data_agent.get_data_by_intent(intent)
                 
                 if not raw_data:
-                    logger.warning("No data found, but attempting broader search...")
+                    logger.warning("No data found, attempting broader search...")
                     
                     # FALLBACK 1: Try without province filter
                     if intent.provinces:
+                        logger.info("Fallback: Removing province filter")
                         intent.provinces = []
                         raw_data = await self.data_agent.get_data_by_intent(intent)
                     
                     # FALLBACK 2: Try without sector filter
                     if not raw_data and intent.sectors:
+                        logger.info("Fallback: Removing sector filter")
                         intent.sectors = []
                         raw_data = await self.data_agent.get_data_by_intent(intent)
                     
                     if not raw_data:
                         # Last resort: Get all data
-                        logger.info("Fetching all data as last resort")
+                        logger.info("Fallback: Fetching all data")
                         intent = QueryIntent(intent_type='distribution')
                         raw_data = await self.data_agent.get_data_by_intent(intent)
                 
                 if not raw_data:
+                    logger.error("No data found even after fallbacks")
                     return {
-                        'message': 'Maaf, tidak ada data yang ditemukan untuk pertanyaan Anda. Silakan coba pertanyaan lain.',
+                        'message': 'Maaf, tidak ada data yang ditemukan untuk pertanyaan Anda. Silakan coba pertanyaan lain atau hubungi administrator.',
                         'visualizations': [],
                         'insights': [],
                         'policies': [],
@@ -173,17 +165,21 @@ class PolicyAnalyzer:
                 
                 # Step 3: Aggregate data
                 aggregated = await self.data_agent.aggregate_data(raw_data, intent)
+                logger.info(f"Data aggregated: type={aggregated.get('type')}")
                 
                 # Step 4: Analyze
                 analysis = self.analysis_agent.analyze(aggregated, intent)
+                logger.info("Analysis completed")
                 
                 # Step 5: Create visualizations
                 visualizations = self.viz_agent.create_visualizations(analysis, aggregated)
+                logger.info(f"Created {len(visualizations)} visualizations")
                 
                 # Step 6: Generate insights
                 insights_result = await self.insight_agent.generate_insights(
                     analysis, aggregated, query, language
                 )
+                logger.info(f"Generated {len(insights_result.get('insights', []))} insights")
                 
                 # Step 7: Generate main response narrative
                 main_message = await self._generate_main_response(
@@ -204,9 +200,9 @@ class PolicyAnalyzer:
                 return await self._handle_conversational_query(query, language)
         
         except Exception as e:
-            logger.error(f"Error in analyze_policy_query: {e}", exc_info=True)
+            logger.error(f"Critical error in analyze_policy_query: {e}", exc_info=True)
             return {
-                'message': f"Maaf, terjadi kesalahan: {str(e)}",
+                'message': f"Maaf, terjadi kesalahan sistem. Silakan coba lagi. Error: {str(e)}",
                 'visualizations': [],
                 'insights': [],
                 'policies': [],
@@ -224,6 +220,7 @@ class PolicyAnalyzer:
         """Generate main narrative response using Gemini"""
         
         if not self.model:
+            logger.warning("No Gemini model available, using fallback")
             return self._generate_fallback_response(analysis, aggregated)
         
         try:
@@ -235,40 +232,46 @@ class PolicyAnalyzer:
                 'insights': insights.get('insights', [])
             }
             
-            # Enhanced prompt
-            prompt = f"""Kamu adalah asisten analisis data Sensus Ekonomi Indonesia yang profesional.
+            # Enhanced prompt for better responses
+            prompt = f"""Kamu adalah asisten analisis data Sensus Ekonomi Indonesia yang profesional dan tepat.
 
 Pertanyaan user: "{query}"
 
 Data yang tersedia:
 {self._prepare_context_for_prompt(context)}
 
-Tugas kamu:
+TUGAS KAMU:
 1. Jawab pertanyaan user secara LANGSUNG dan SPESIFIK dengan data yang ada
 2. Berikan angka-angka konkret (jumlah usaha, persentase, ranking)
 3. Highlight insight penting dalam 2-3 kalimat
-4. Jangan sebutkan keterbatasan data atau menyuruh user ke BPS
-5. Gunakan bahasa yang mudah dipahami
+4. JANGAN sebutkan keterbatasan data atau menyuruh user ke BPS/sumber lain
+5. Gunakan bahasa yang mudah dipahami dan profesional
 
-Format jawaban:
-- Paragraf pembuka: Jawaban langsung dengan angka
-- Paragraf analisis: Insight dan perbandingan
-- Paragraf penutup: Kesimpulan singkat
+FORMAT JAWABAN:
+- Paragraf pembuka: Jawaban langsung dengan angka spesifik
+- Paragraf analisis: Insight dan perbandingan penting
+- Paragraf penutup: Kesimpulan singkat (opsional jika sudah jelas)
 
-Panjang: 3-5 kalimat maksimal.
-Bahasa: {language}
+PANJANG: 3-5 kalimat maksimal (concise tapi informatif)
+BAHASA: {language}
+TONE: Profesional, informatif, langsung ke point
+
+PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif.
 """
             
             response = self.model.generate_content(prompt)
-            return response.text.strip()
+            generated_text = response.text.strip()
+            
+            logger.info(f"Generated response length: {len(generated_text)} chars")
+            
+            return generated_text
             
         except Exception as e:
-            logger.error(f"Error generating main response: {e}")
+            logger.error(f"Error generating main response with Gemini: {e}", exc_info=True)
             return self._generate_fallback_response(analysis, aggregated)
     
     def _prepare_context_for_prompt(self, context: Dict[str, Any]) -> str:
         """Format context for LLM prompt"""
-        import json
         
         # Simplified context for better LLM comprehension
         simplified = {
@@ -278,43 +281,130 @@ Bahasa: {language}
         
         analysis = context.get('analysis', {})
         
+        # Add relevant analysis results based on type
         if 'top_provinces' in analysis:
-            simplified['hasil_analisis']['provinsi_teratas'] = analysis['top_provinces']
+            simplified['hasil_analisis']['provinsi_teratas'] = [
+                {
+                    'provinsi': prov['provinsi'],
+                    'total_usaha': prov['total'],
+                    'persentase': round(prov['percentage'], 2)
+                }
+                for prov in analysis['top_provinces']
+            ]
         
-        if 'max_province' in analysis:
-            simplified['hasil_analisis']['provinsi_tertinggi'] = analysis['max_province']
+        if 'max_province' in analysis and analysis['max_province']:
+            simplified['hasil_analisis']['provinsi_tertinggi'] = {
+                'provinsi': analysis['max_province'].get('provinsi'),
+                'total': analysis['max_province'].get('total')
+            }
+        
+        if 'min_province' in analysis and analysis['min_province']:
+            simplified['hasil_analisis']['provinsi_terendah'] = {
+                'provinsi': analysis['min_province'].get('provinsi'),
+                'total': analysis['min_province'].get('total')
+            }
         
         if 'distribution_detail' in analysis:
-            simplified['hasil_analisis']['distribusi_sektor'] = analysis['distribution_detail'][:5]  # Top 5
+            # Top 5 sectors only
+            simplified['hasil_analisis']['distribusi_sektor'] = [
+                {
+                    'kode': detail['sector_code'],
+                    'nama': detail['sector_name'],
+                    'total': detail['total'],
+                    'persentase': round(detail['percentage'], 2)
+                }
+                for detail in analysis['distribution_detail'][:5]
+            ]
         
-        if 'top_sector' in analysis:
-            simplified['hasil_analisis']['sektor_tertinggi'] = analysis['top_sector']
+        if 'top_sector' in analysis and analysis['top_sector']:
+            sector_code, sector_info = analysis['top_sector']
+            simplified['hasil_analisis']['sektor_tertinggi'] = {
+                'kode': sector_code,
+                'nama': sector_info['name'],
+                'total': sector_info['total']
+            }
+        
+        if 'total_usaha' in analysis:
+            simplified['hasil_analisis']['total_usaha'] = analysis['total_usaha']
+        
+        if 'average' in analysis:
+            simplified['hasil_analisis']['rata_rata'] = round(analysis['average'], 2)
+        
+        if 'concentration' in analysis:
+            simplified['hasil_analisis']['konsentrasi_top3'] = round(analysis['concentration'], 2)
         
         return json.dumps(simplified, indent=2, ensure_ascii=False)
     
     def _generate_fallback_response(self, analysis: Dict[str, Any], aggregated: Dict[str, Any]) -> str:
-        """Generate response without LLM"""
+        """Generate response without LLM (rule-based)"""
         
         data_type = aggregated.get('type', 'unknown')
         
-        if data_type == 'ranking':
-            top_provinces = analysis.get('top_provinces', [])
-            if top_provinces:
-                top = top_provinces[0]
-                return f"Berdasarkan data Sensus Ekonomi 2016, {top['provinsi']} memiliki jumlah usaha terbanyak dengan total {top['total']:,} unit usaha ({top['percentage']:.1f}% dari total nasional). Provinsi ini mendominasi perekonomian nasional di sektor yang dianalisis."
+        try:
+            if data_type == 'ranking':
+                top_provinces = analysis.get('top_provinces', [])
+                if top_provinces:
+                    top = top_provinces[0]
+                    total_national = analysis.get('total_usaha', 0)
+                    
+                    response = f"Berdasarkan data Sensus Ekonomi 2016, {top['provinsi']} memiliki jumlah usaha terbanyak dengan total {top['total']:,} unit usaha"
+                    
+                    if top['percentage'] > 0:
+                        response += f" ({top['percentage']:.1f}% dari total nasional)"
+                    
+                    response += ". "
+                    
+                    # Add top 3 if available
+                    if len(top_provinces) >= 3:
+                        top3_names = ', '.join([p['provinsi'] for p in top_provinces[:3]])
+                        concentration = analysis.get('concentration', 0)
+                        response += f"Tiga provinsi teratas ({top3_names}) menguasai {concentration:.1f}% dari total usaha nasional."
+                    
+                    return response
+            
+            elif data_type == 'distribution':
+                dist_detail = analysis.get('distribution_detail', [])
+                if dist_detail:
+                    top_sector = dist_detail[0]
+                    total_usaha = analysis.get('total_usaha', 0)
+                    
+                    response = f"Analisis distribusi menunjukkan bahwa sektor {top_sector['sector_name']} mendominasi dengan total {top_sector['total']:,} unit usaha ({top_sector['percentage']:.1f}% dari total). "
+                    
+                    # Add top 3 sectors
+                    if len(dist_detail) >= 3:
+                        top3_sectors = ', '.join([s['sector_name'] for s in dist_detail[:3]])
+                        response += f"Tiga sektor teratas adalah {top3_sectors}."
+                    
+                    return response
+            
+            elif data_type == 'comparison':
+                max_prov = analysis.get('max_province', {})
+                min_prov = analysis.get('min_province', {})
+                average = analysis.get('average', 0)
+                
+                if max_prov:
+                    response = f"Dari perbandingan data, {max_prov.get('provinsi', 'provinsi tertentu')} memiliki jumlah usaha tertinggi dengan {max_prov.get('total', 0):,} unit usaha"
+                    
+                    if min_prov:
+                        response += f", sementara {min_prov.get('provinsi', 'provinsi lain')} memiliki {min_prov.get('total', 0):,} unit usaha"
+                    
+                    if average > 0:
+                        response += f". Rata-rata jumlah usaha per provinsi adalah {average:,.0f} unit."
+                    else:
+                        response += "."
+                    
+                    return response
+            
+            # Generic fallback
+            total_usaha = analysis.get('total_usaha', 0)
+            if total_usaha > 0:
+                return f"Data telah berhasil dianalisis dengan total {total_usaha:,} unit usaha. Silakan lihat visualisasi dan insight untuk informasi lebih detail."
+            else:
+                return "Data telah berhasil dianalisis. Silakan lihat visualisasi dan insight untuk informasi lebih detail."
         
-        elif data_type == 'distribution':
-            dist_detail = analysis.get('distribution_detail', [])
-            if dist_detail:
-                top_sector = dist_detail[0]
-                return f"Analisis distribusi menunjukkan bahwa sektor {top_sector['sector_name']} mendominasi dengan total {top_sector['total']:,} unit usaha ({top_sector['percentage']:.1f}% dari total). Sektor ini merupakan tulang punggung ekonomi Indonesia."
-        
-        elif data_type == 'comparison':
-            max_prov = analysis.get('max_province', {})
-            if max_prov:
-                return f"Dari perbandingan data, {max_prov.get('provinsi', 'provinsi tertentu')} memiliki jumlah usaha tertinggi dengan {max_prov.get('total', 0):,} unit usaha. Data ini menunjukkan konsentrasi ekonomi yang signifikan di wilayah tersebut."
-        
-        return "Data telah berhasil dianalisis. Silakan lihat visualisasi dan insight untuk informasi lebih detail."
+        except Exception as e:
+            logger.error(f"Error in fallback response generation: {e}", exc_info=True)
+            return "Data telah berhasil dianalisis. Silakan lihat visualisasi dan insight untuk informasi lebih detail."
     
     async def _handle_conversational_query(self, query: str, language: str) -> Dict[str, Any]:
         """Handle non-data queries conversationally"""
@@ -336,15 +426,17 @@ Pertanyaan user: "{query}"
 Tugas kamu:
 1. Jawab dengan ramah dan informatif
 2. Jika user bertanya tentang kemampuan, jelaskan bahwa kamu bisa:
-   - Analisis jumlah usaha per provinsi
-   - Perbandingan antar wilayah
-   - Distribusi per sektor KBLI
+   - Analisis jumlah usaha per provinsi dan sektor
+   - Perbandingan antar wilayah (provinsi)
+   - Distribusi per sektor KBLI (A-U)
    - Ranking dan statistik ekonomi
-3. Jika user menyapa, balas dengan ramah dan tawarkan bantuan
+   - Insight dan rekomendasi kebijakan
+3. Jika user menyapa, balas dengan ramah dan tawarkan bantuan spesifik
 4. Jangan buat asumsi tentang data yang tidak ada
 
 Bahasa: {language}
-Panjang: 2-3 kalimat.
+Panjang: 2-3 kalimat maksimal.
+Tone: Ramah, helpful, profesional.
 """
             
             response = self.model.generate_content(prompt)
@@ -357,342 +449,11 @@ Panjang: 2-3 kalimat.
             }
             
         except Exception as e:
-            logger.error(f"Error in conversational handler: {e}")
+            logger.error(f"Error in conversational handler: {e}", exc_info=True)
             return {
-                'message': "Halo! Ada yang bisa saya bantu terkait data Sensus Ekonomi Indonesia?",
+                'message': "Halo! Ada yang bisa saya bantu terkait data Sensus Ekonomi Indonesia? Saya bisa menganalisis jumlah usaha per provinsi, perbandingan antar wilayah, distribusi sektor, dan memberikan insight kebijakan.",
                 'visualizations': [],
                 'insights': [],
                 'policies': [],
                 'supporting_data_count': 0
             }
-
-    async def _handle_error_scenario(self, user_message: str, error: str) -> Dict[str, Any]:
-        """Handle error scenarios transparently"""
-        return {
-            'message': f'I encountered a technical error while analyzing your policy question: "{user_message}". Error details: {error}. Please try rephrasing your question or try again later.',
-            'data_availability': 'Error accessing data',
-            'insights': ['Technical issues can affect analysis quality'],
-            'policies': [],
-            'visualizations': [],
-            'supporting_data_count': 0
-        }
-
-    def _get_data_driven_analyst_prompt(self, user_language: str = "English") -> str:
-        """Generate system prompt for data-driven policy analysis with language support"""
-        return f"""
-        You are an AI Policy and Economic Analysis Assistant specializing in Indonesian Economic Census (Sensus Ekonomi Indonesia).
-        
-        YOUR PRIMARY SCOPE:
-        1. Sensus Ekonomi Indonesia
-        2. Perekonomian Indonesia
-        3. Kegiatan Sensus
-        4. Metodologi Sensus
-        5. Diseminasi dan Publikasi
-        
-        MULTILINGUAL SUPPORT:
-        - Always respond in the SAME language as the user's question ({user_language})
-        
-        STRICT DATA REQUIREMENTS:
-        - Only use data explicitly provided in the context
-        - Never generate hypothetical numbers or scenarios
-        
-        You are helpful and informative about Indonesian Economic Census while being honest about data limitations.
-        """
-
-    def _detect_language(self, text: str) -> str:
-        try:
-            detected_code = detect(text)
-            language_map = {
-                'en': 'English', 'es': 'Spanish', 'fr': 'French', 
-                'id': 'Indonesian', 'ms': 'Malay', 'de': 'German'
-            }
-            return language_map.get(detected_code, 'English')
-        except Exception:
-            return "English"
-
-    def _is_analysis_related_query(self, user_message: str) -> bool:
-        message_lower = user_message.lower()
-        analysis_keywords = [
-            'analyze', 'analysis', 'compare', 'data', 'statistics', 'chart', 'graph', 
-            'visualization', 'policy', 'economic', 'gdp', 'growth', 'inflation', 
-            'analisis', 'bandingkan', 'statistik', 'visualisasi', 'kebijakan', 
-            'ekonomi', 'pertumbuhan', 'inflasi', 'sensus', 'census'
-        ]
-        chat_keywords = ['hello', 'hi', 'halo', 'apa kabar', 'thank you', 'terima kasih']
-        
-        analysis_score = sum(1 for keyword in analysis_keywords if keyword in message_lower)
-        chat_score = sum(1 for keyword in chat_keywords if keyword in message_lower)
-        
-        if analysis_score > 0 and chat_score == 0:
-            return True
-        if analysis_score > chat_score:
-            return True
-        return False
-
-    def _prepare_detailed_data_context(self, scraped_data: List[ScrapedData]) -> str:
-        if not scraped_data:
-            return "No data available for analysis."
-        
-        context_parts = ["AVAILABLE REAL DATA:\n"]
-        by_category = {}
-        for data in scraped_data:
-            category = data.category or 'general'
-            if category not in by_category:
-                by_category[category] = []
-            by_category[category].append(data)
-        
-        for category, items in by_category.items():
-            context_parts.append(f"\n{category.upper()} DATA:")
-            for i, item in enumerate(items[:10]):
-                context_parts.append(f"\n[{category}_{i+1}] {item.title}")
-                context_parts.append(f"Source: {item.source.value}")
-                context_parts.append(f"Content: {item.content}")
-                if item.metadata:
-                    context_parts.append("Metadata:")
-                    for key, value in item.metadata.items():
-                        context_parts.append(f"  - {key}: {value}")
-        
-        return "\n".join(context_parts)
-
-    async def _generate_data_driven_visualizations(
-        self, 
-        scraped_data: List[ScrapedData],
-        query: str,
-        viz_requests: List[Dict]
-    ) -> List[VisualizationConfig]:
-        visualizations = []
-        economic_data = []
-        for data in scraped_data:
-            if data.category == PolicyCategory.ECONOMIC and data.metadata:
-                if 'data_points' in data.metadata:
-                    economic_data.extend(data.metadata['data_points'])
-                elif any(key in data.metadata for key in ['gdp_growth', 'investment_amount', 'jobs_created']):
-                    economic_data.append(data.metadata)
-        
-        if economic_data:
-            viz_config = self._create_real_data_chart(economic_data, query)
-            if viz_config:
-                visualizations.append(viz_config)
-        else:
-            availability_chart = self._create_data_availability_chart(scraped_data)
-            visualizations.append(availability_chart)
-        
-        return visualizations
-
-    def _create_real_data_chart(self, data_points: List[Dict], query: str) -> Optional[VisualizationConfig]:
-        try:
-            yearly_data = {}
-            categories = set()
-            for point in data_points[:20]:
-                if 'year' in point and 'value' in point:
-                    year = str(point['year'])
-                    if year not in yearly_data:
-                        yearly_data[year] = {}
-                    country = point.get('country', 'Data')
-                    categories.add(country)
-                    yearly_data[year][country] = point['value']
-            
-            if yearly_data:
-                years = sorted(yearly_data.keys())
-                categories = sorted(list(categories))
-                series_data = []
-                colors = ['#e74c3c', '#ff6b35', '#ff8c42', '#ffad73']
-                for i, category in enumerate(categories):
-                    values = []
-                    for year in years:
-                        values.append(yearly_data[year].get(category, None))
-                    series_data.append({
-                        "name": category, "type": "line", "data": values,
-                        "itemStyle": {"color": colors[i % len(colors)]}
-                    })
-                
-                config = {
-                    "title": {
-                        "text": f"Real Economic Data Analysis",
-                        "subtext": f"Based on {len(data_points)} actual data points",
-                        "left": "center",
-                        "textStyle": {"color": "#e74c3c", "fontSize": 16}
-                    },
-                    "tooltip": {"trigger": "axis"},
-                    "legend": {"data": categories, "bottom": 10},
-                    "xAxis": {"type": "category", "data": years},
-                    "yAxis": {"type": "value", "axisLabel": {"formatter": "{value}%"}},
-                    "series": series_data
-                }
-                return VisualizationConfig(
-                    id=f"real_data_{int(datetime.utcnow().timestamp())}",
-                    type="chart", title="Real Economic Data Analysis",
-                    config=config, data={"source": "Real data points", "count": len(data_points)}
-                )
-        except Exception as e:
-            logger.error(f"Error creating real data chart: {e}")
-        return None
-
-    def _create_data_availability_chart(self, scraped_data: List[ScrapedData]) -> VisualizationConfig:
-        category_counts = {}
-        source_counts = {}
-        for data in scraped_data:
-            cat = data.category.value if data.category else 'unknown'
-            src = data.source.value if data.source else 'unknown'
-            category_counts[cat] = category_counts.get(cat, 0) + 1
-            source_counts[src] = source_counts.get(src, 0) + 1
-        
-        pie_data = []
-        colors = ['#e74c3c', '#ff6b35', '#ff8c42', '#ffad73', '#ffd4a3']
-        for i, (category, count) in enumerate(category_counts.items()):
-            pie_data.append({
-                "value": count, "name": f"{category.title()} ({count} items)",
-                "itemStyle": {"color": colors[i % len(colors)]}
-            })
-        
-        config = {
-            "title": {
-                "text": "Available Data Sources",
-                "subtext": f"Total: {len(scraped_data)} data points",
-                "left": "center", "textStyle": {"color": "#e74c3c", "fontSize": 16}
-            },
-            "tooltip": {"trigger": "item"},
-            "series": [{
-                "name": "Data Availability", "type": "pie", "radius": "50%",
-                "data": pie_data, "emphasis": {"itemStyle": {"shadowBlur": 10}}
-            }]
-        }
-        return VisualizationConfig(
-            id=f"data_availability_{int(datetime.utcnow().timestamp())}",
-            type="chart", title="Available Data Sources",
-            config=config, data={"categories": category_counts, "sources": source_counts}
-        )
-
-    def _create_evidence_based_recommendations(self, recommendations_data: List[Dict]) -> List[PolicyRecommendation]:
-        recommendations = []
-        for rec_data in recommendations_data:
-            try:
-                category_str = rec_data.get('category', 'economic').lower()
-                category = PolicyCategory(category_str) if category_str in PolicyCategory.__members__.values() else PolicyCategory.ECONOMIC
-                supporting_evidence = rec_data.get('supporting_evidence', 'Based on available data analysis')
-                recommendation = PolicyRecommendation(
-                    title=rec_data.get('title', 'Evidence-Based Policy Recommendation'),
-                    description=f"{rec_data.get('description', '')} | Evidence: {supporting_evidence}",
-                    priority=rec_data.get('priority', 'medium'),
-                    category=category,
-                    impact=rec_data.get('impact', 'Impact assessment requires more specific data'),
-                    implementation_steps=rec_data.get('implementation_steps', ['Gather more specific implementation data']),
-                    supporting_insights=[supporting_evidence]
-                )
-                recommendations.append(recommendation)
-            except Exception as e:
-                logger.error(f"Error creating evidence-based recommendation: {e}")
-        return recommendations
-
-    def _parse_ai_response(self, response: str) -> Dict[str, Any]:
-        try:
-            # Clean markdown code blocks if present
-            cleaned_response = response.replace("```json", "").replace("```", "").strip()
-            return json.loads(cleaned_response)
-        except Exception as e:
-            logger.error(f"Error parsing AI response: {e}")
-            return {'main_response': response}
-
-    async def _generate_visualizations(self, viz_requests: List[Dict], query: str) -> List[VisualizationConfig]:
-        visualizations = []
-        for i, viz_request in enumerate(viz_requests[:3]):
-            try:
-                viz_config = await self._create_visualization_config(viz_request, query, i)
-                if viz_config:
-                    visualizations.append(viz_config)
-            except Exception as e:
-                logger.error(f"Error creating visualization {i}: {e}")
-        return visualizations
-
-    async def _create_visualization_config(self, viz_request: Dict, query: str, index: int) -> Optional[VisualizationConfig]:
-        viz_type = viz_request.get('type', 'chart')
-        title = viz_request.get('title', f'Policy Analysis Chart {index + 1}')
-        if viz_type == 'chart' and 'economic' in query.lower():
-            config = self._create_economic_chart_config(title)
-        elif viz_type == 'chart' and ('social' in query.lower() or 'demographic' in query.lower()):
-            config = self._create_social_chart_config(title)
-        elif viz_type == 'graph':
-            config = self._create_network_graph_config(title)
-        else:
-            config = self._create_default_chart_config(title)
-        return VisualizationConfig(
-            id=f"viz_{index}_{int(datetime.utcnow().timestamp())}",
-            type=viz_type, title=title, config=config, data={}
-        )
-
-    def _create_economic_chart_config(self, title: str) -> Dict[str, Any]:
-        return {
-            "title": {"text": title, "left": "center", "textStyle": {"color": "#e74c3c", "fontSize": 18, "fontWeight": "bold"}},
-            "tooltip": {"trigger": "axis"},
-            "legend": {"data": ["GDP Growth", "Employment Rate", "Inflation Rate"], "bottom": 10},
-            "xAxis": {"type": "category", "data": ["2020", "2021", "2022", "2023", "2024"]},
-            "yAxis": {"type": "value"},
-            "series": [
-                {"name": "GDP Growth", "type": "line", "data": [-3.4, 5.7, 2.1, 2.4, 2.8], "itemStyle": {"color": "#e74c3c"}},
-                {"name": "Employment Rate", "type": "line", "data": [59.2, 58.4, 60.1, 62.3, 63.1], "itemStyle": {"color": "#ff6b35"}},
-                {"name": "Inflation Rate", "type": "line", "data": [1.2, 4.7, 8.0, 4.1, 3.2], "itemStyle": {"color": "#ff8c42"}}
-            ]
-        }
-
-    def _create_social_chart_config(self, title: str) -> Dict[str, Any]:
-        return {
-            "title": {"text": title, "left": "center", "textStyle": {"color": "#e74c3c", "fontSize": 18, "fontWeight": "bold"}},
-            "tooltip": {"trigger": "item"},
-            "series": [{
-                "name": "Social Impact", "type": "pie", "radius": "50%",
-                "data": [
-                    {"value": 35, "name": "Healthcare Access", "itemStyle": {"color": "#e74c3c"}},
-                    {"value": 25, "name": "Education Quality", "itemStyle": {"color": "#ff6b35"}},
-                    {"value": 20, "name": "Social Welfare", "itemStyle": {"color": "#ff8c42"}},
-                    {"value": 15, "name": "Housing Affordability", "itemStyle": {"color": "#ffad73"}},
-                    {"value": 5, "name": "Other Services", "itemStyle": {"color": "#ffd4a3"}}
-                ]
-            }]
-        }
-
-    def _create_network_graph_config(self, title: str) -> Dict[str, Any]:
-        return {
-            "title": {"text": title, "left": "center", "textStyle": {"color": "#e74c3c", "fontSize": 18, "fontWeight": "bold"}},
-            "tooltip": {},
-            "series": [{
-                "type": "graph", "layout": "force", "symbolSize": 50, "roam": True, "label": {"show": True},
-                "data": [{"name": "Policy", "x": 300, "y": 300}, {"name": "Economy", "x": 800, "y": 300}, {"name": "Society", "x": 550, "y": 100}, {"name": "Environment", "x": 550, "y": 500}],
-                "links": [{"source": 0, "target": 1}, {"source": 0, "target": 2}, {"source": 0, "target": 3}, {"source": 1, "target": 2}]
-            }]
-        }
-
-    def _create_default_chart_config(self, title: str) -> Dict[str, Any]:
-        return {
-            "title": {"text": title, "left": "center", "textStyle": {"color": "#e74c3c", "fontSize": 18, "fontWeight": "bold"}},
-            "tooltip": {"trigger": "axis"},
-            "xAxis": {"type": "category", "data": ["Q1", "Q2", "Q3", "Q4"]},
-            "yAxis": {"type": "value"},
-            "series": [{"name": "Policy Impact", "type": "bar", "data": [85, 92, 78, 95], "itemStyle": {"color": "#e74c3c"}}]
-        }
-
-    def _create_policy_recommendations(
-        self, 
-        recommendations_data: List[Dict]
-    ) -> List[PolicyRecommendation]:
-        """Create policy recommendation objects"""
-        recommendations = []
-        
-        for rec_data in recommendations_data:
-            try:
-                category_str = rec_data.get('category', 'economic').lower()
-                category = PolicyCategory(category_str) if category_str in PolicyCategory.__members__.values() else PolicyCategory.ECONOMIC
-                
-                recommendation = PolicyRecommendation(
-                    title=rec_data.get('title', 'Policy Recommendation'),
-                    description=rec_data.get('description', ''),
-                    priority=rec_data.get('priority', 'medium'),
-                    category=category,
-                    impact=rec_data.get('impact', ''),
-                    implementation_steps=rec_data.get('implementation_steps', [])
-                )
-                recommendations.append(recommendation)
-                
-            except Exception as e:
-                logger.error(f"Error creating policy recommendation: {e}")
-        
-        return recommendations
