@@ -11,7 +11,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
-class PolicyAnalyzer:
+class PolicyAIAnalyzer:
     """Enhanced Policy Analyzer with better intent detection"""
     
     def __init__(self, db: AsyncIOMotorDatabase):
