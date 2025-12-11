@@ -137,7 +137,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">⌘</kbd>
                     <span className="mx-1">+</span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Enter</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Enter (for Mac OS)</kbd>
+                    <span className="mx-1">or</span>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">ctrl</kbd>
+                    <span className="mx-1">+</span>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Enter (for Windows)</kbd>
                     <span className="ml-1">to save</span>
                   </div>
                   <div className="flex items-center gap-2">
