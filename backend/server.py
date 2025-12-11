@@ -32,7 +32,7 @@ from models import (
     ScrapedData
 )
 from database import PolicyDatabase
-from ai_analyzer import PolicyAnalyzer
+from ai_analyzer import PolicyAIAnalyzer
 from report_generator import ReportGenerator
 
 # --- 4. INISIALISASI DATABASE & AI (CRITICAL FIX) ---
@@ -75,7 +75,7 @@ async def startup_event():
         
         # Initialize AI Analyzer with RAW database object (not PolicyDatabase wrapper)
         # PolicyAnalyzer expects AsyncIOMotorDatabase
-        ai_analyzer = PolicyAnalyzer(policy_db.db)
+        ai_analyzer = PolicyAIAnalyzer(policy_db.db)
         logger.info("AI Analyzer initialized successfully")
         
     except Exception as e:
