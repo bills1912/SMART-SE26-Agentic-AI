@@ -32,12 +32,8 @@ from models import (
     ScrapedData
 )
 from database import PolicyDatabase
-from ai_analyzer import PolicyAIAnalyzer
-from web_scraper import PolicyDataScraper
-from auth_routes import router as auth_router
+from ai_analyzer import PolicyAnalyzer
 from report_generator import ReportGenerator
-# Import data_sources untuk trigger scraping manual/otomatis
-from data_sources import populate_real_data
 
 # --- 4. INISIALISASI DATABASE & AI (CRITICAL FIX) ---
 # Mengambil URL dari environment variable
@@ -49,11 +45,12 @@ if not mongo_url:
     raise ValueError("MONGO_URL is not set. Please check your .env file.")
 
 # Inisialisasi Database Object (Global Variable)
-# Ini yang sebelumnya hilang sehingga menyebabkan error
 policy_db = PolicyDatabase(mongo_url, db_name)
 
-# Inisialisasi AI & Report Generator
-ai_analyzer = PolicyAIAnalyzer(policy_db)
+# AI Analyzer akan diinit di startup event setelah database ready
+ai_analyzer = None
+
+# Report Generator
 report_generator = ReportGenerator()
 
 # --- 5. SETUP APLIKASI FASTAPI ---
@@ -70,12 +67,20 @@ last_scraping_time = None
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
+    global ai_analyzer
     try:
-        # Ini akan otomatis membuat koleksi dan index di MongoDB Atlas Anda
+        # Initialize database collections
         await policy_db.init_collections()
-        logger.info("Application started & Connected to MongoDB Atlas successfully")
+        logger.info("Connected to MongoDB Atlas successfully")
+        
+        # Initialize AI Analyzer with RAW database object (not PolicyDatabase wrapper)
+        # PolicyAnalyzer expects AsyncIOMotorDatabase
+        ai_analyzer = PolicyAnalyzer(policy_db.db)
+        logger.info("AI Analyzer initialized successfully")
+        
     except Exception as e:
-        logger.error(f"Error during startup: {e}")
+        logger.error(f"Error during startup: {e}", exc_info=True)
+        raise
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -99,7 +104,7 @@ async def health_check():
         return {
             "status": "healthy",
             "database": "connected",
-            "ai_analyzer": "ready",
+            "ai_analyzer": "ready" if ai_analyzer else "not_initialized",
             "scraping_status": "in_progress" if scraping_in_progress else "idle",
             "last_scraping": last_scraping_time,
             "data_stats": stats
@@ -111,6 +116,9 @@ async def health_check():
 @api_router.post("/chat", response_model=PolicyAnalysisResponse)
 async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: BackgroundTasks):
     try:
+        if not ai_analyzer:
+            raise HTTPException(status_code=503, detail="AI Analyzer not initialized")
+        
         # Get or create session
         session_id = request.session_id
         if not session_id:
@@ -131,15 +139,15 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
         await policy_db.save_chat_message(user_message)
         
         # ========================================
-        # TIDAK PERLU SCRAPING - Langsung ke AI analyzer
-        # Data akan diambil dari collection initial_data
+        # MULTI-AGENT ANALYSIS
+        # Data diambil langsung dari initial_data collection
         # ========================================
         
         # Analyze with AI using multi-agent system
         analysis_result = await ai_analyzer.analyze_policy_query(
-            request.message,
-            session_id,
-            scraped_data=None  # Parameter diabaikan, agents ambil dari initial_data
+            query=request.message,
+            language="Indonesian",
+            scraped_data=None  # Not used - agents get data from initial_data
         )
         
         # Save AI response
@@ -155,7 +163,25 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
         
         # Save recommendations if any
         if analysis_result.get('policies'):
-            await policy_db.save_policy_recommendations(analysis_result['policies'])
+            # Convert dict policies to PolicyRecommendation objects
+            from models import PolicyRecommendation, PolicyCategory
+            policy_objects = []
+            for policy_dict in analysis_result['policies']:
+                try:
+                    policy_obj = PolicyRecommendation(
+                        title=policy_dict.get('title', ''),
+                        description=policy_dict.get('description', ''),
+                        priority=policy_dict.get('priority', 'medium'),
+                        category=PolicyCategory(policy_dict.get('category', 'economic')),
+                        impact=policy_dict.get('impact', ''),
+                        implementation_steps=policy_dict.get('implementation_steps', [])
+                    )
+                    policy_objects.append(policy_obj)
+                except Exception as e:
+                    logger.error(f"Error creating policy object: {e}")
+            
+            if policy_objects:
+                await policy_db.save_policy_recommendations(policy_objects)
         
         return PolicyAnalysisResponse(
             message=analysis_result['message'],
@@ -194,12 +220,11 @@ async def get_chat_session(session_id: str):
 
 @api_router.post("/scrape/trigger")
 async def trigger_scraping(background_tasks: BackgroundTasks):
-    global scraping_in_progress
-    if scraping_in_progress:
-        return {"message": "Scraping already in progress", "status": "in_progress"}
-    
-    background_tasks.add_task(trigger_data_scraping)
-    return {"message": "Scraping triggered", "status": "started"}
+    """Deprecated - data is now from initial_data collection"""
+    return {
+        "message": "Scraping is deprecated. Using initial_data collection.",
+        "status": "not_needed"
+    }
 
 @api_router.get("/data/recent", response_model=List[ScrapedData])
 async def get_recent_data(limit: int = 50, category: Optional[str] = None):
@@ -223,8 +248,16 @@ async def search_data(query: str, limit: int = 50):
 async def get_stats():
     try:
         stats = await policy_db.get_database_stats()
-        stats["scraping_status"] = "in_progress" if scraping_in_progress else "idle"
+        stats["scraping_status"] = "deprecated"
         stats["last_scraping"] = last_scraping_time
+        
+        # Add initial_data stats
+        try:
+            initial_data_count = await policy_db.db.initial_data.count_documents({})
+            stats["initial_data_count"] = initial_data_count
+        except:
+            stats["initial_data_count"] = 0
+        
         return stats
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
@@ -258,36 +291,16 @@ async def generate_report(session_id: str, format: str):
         logger.error(f"Error generating report: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
 
-# --- 8. BACKGROUND TASKS ---
-async def trigger_data_scraping():
-    """Background task to collect real data"""
-    global scraping_in_progress, last_scraping_time
-    try:
-        scraping_in_progress = True
-        logger.info("Starting real data collection...")
-        
-        # 1. Try web scraping (Basic)
-        async with PolicyDataScraper() as scraper:
-            scraped_data = await scraper.scrape_all_sources()
-            if scraped_data:
-                await policy_db.save_scraped_data(scraped_data)
-
-        # 2. Get real data from API/Sources (Robust)
-        real_data_count = await populate_real_data()
-        
-        logger.info(f"Data collection completed. Real data points added: {real_data_count}")
-        
-        from datetime import datetime
-        last_scraping_time = datetime.utcnow().isoformat()
-        
-    except Exception as e:
-        logger.error(f"Error in data collection: {e}")
-    finally:
-        scraping_in_progress = False
-
-# --- 9. REGISTER ROUTERS ---
+# --- 8. REGISTER ROUTERS ---
 app.include_router(api_router)
-app.include_router(auth_router)
+
+# Try to include auth router if available
+try:
+    from auth_routes import router as auth_router
+    app.include_router(auth_router)
+    logger.info("Auth routes registered")
+except ImportError:
+    logger.warning("Auth routes not available")
 
 # Add CORS middleware
 app.add_middleware(
@@ -296,7 +309,7 @@ app.add_middleware(
     allow_origins=[
         "https://smart-se26-agentic-ai-chatbot-web.onrender.com",
         "http://localhost:3000"
-        ],
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
