@@ -60,28 +60,43 @@ class DataRetrievalAgent:
             return 0
     
     async def understand_query(self, query: str) -> QueryIntent:
-        """Memahami intent dari user query"""
+        """Enhanced query understanding with better intent detection"""
         query_lower = query.lower()
         
         intent = QueryIntent(intent_type='distribution')
         
-        # Deteksi intent type
-        if any(word in query_lower for word in ['bandingkan', 'compare', 'versus', 'vs', 'perbandingan']):
+        # Enhanced intent detection
+        if any(word in query_lower for word in ['bandingkan', 'compare', 'versus', 'vs', 'perbandingan', 'beda']):
             intent.intent_type = 'comparison'
-        elif any(word in query_lower for word in ['ranking', 'urut', 'tertinggi', 'terendah', 'terbanyak', 'top', 'terbesar']):
+        elif any(word in query_lower for word in ['ranking', 'urut', 'tertinggi', 'terendah', 'terbanyak', 'terbesar', 'top', 'paling', 'mana yang']):
             intent.intent_type = 'ranking'
         elif any(word in query_lower for word in ['tren', 'trend', 'perkembangan', 'perubahan']):
             intent.intent_type = 'trend'
-        elif any(word in query_lower for word in ['distribusi', 'sebaran', 'persebaran', 'komposisi', 'bagaimana']):
+        elif any(word in query_lower for word in ['distribusi', 'sebaran', 'persebaran', 'komposisi', 'bagaimana', 'proporsi']):
             intent.intent_type = 'distribution'
         
-        # Deteksi provinsi (extract dari query)
-        intent.provinces = self._extract_provinces(query)
+        # ENHANCED: Detect if asking for specific value (e.g., "berapa jumlah")
+        if any(word in query_lower for word in ['berapa', 'jumlah', 'total', 'banyak']):
+            # If asking about specific province + sector → comparison
+            provinces = self._extract_provinces(query)
+            sectors = self._extract_sectors(query)
+            
+            if provinces and len(provinces) == 1 and sectors:
+                intent.intent_type = 'comparison'  # Single province analysis
+            elif provinces and len(provinces) == 1:
+                intent.intent_type = 'comparison'  # Province overview
+            elif sectors and not provinces:
+                intent.intent_type = 'distribution'  # Sector analysis across all provinces
         
-        # Deteksi sektor KBLI
+        # Extract entities
+        intent.provinces = self._extract_provinces(query)
         intent.sectors = self._extract_sectors(query)
         
-        logger.info(f"Understood query intent: type={intent.intent_type}, provinces={intent.provinces}, sectors={intent.sectors}")
+        # ENHANCEMENT: If asking "mana yang..." without provinces → ranking
+        if 'mana yang' in query_lower and not intent.provinces:
+            intent.intent_type = 'ranking'
+        
+        logger.info(f"Enhanced intent: type={intent.intent_type}, provinces={intent.provinces}, sectors={intent.sectors}")
         
         return intent
     

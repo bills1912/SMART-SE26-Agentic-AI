@@ -18,332 +18,349 @@ DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
 
-class PolicyAIAnalyzer:
-    def __init__(self):
-        # Ambil API Key Gemini dari Environment
-        self.api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+class PolicyAnalyzer:
+    """Enhanced Policy Analyzer with better intent detection"""
+    
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.db = db
         
-        if not self.api_key:
-            logger.warning("GEMINI_API_KEY not found in environment variables")
+        # Initialize Gemini
+        api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+        if api_key:
+            genai.configure(api_key=api_key)
+            model_name = os.environ.get('LLM_MODEL', 'gemini-2.0-flash-exp')
+            self.model = genai.GenerativeModel(model_name)
+            logger.info(f"Gemini initialized with model: {model_name}")
         else:
-            # Konfigurasi Gemini
-            genai.configure(api_key=self.api_key)
-            
-        # Konfigurasi Model
-        # Menggunakan Gemini 1.5 Flash yang cepat dan efisien
-        self.model_name = os.environ.get('LLM_MODEL') or "gemini-2.5-flash"
+            logger.warning("No Gemini API key found")
+            self.model = None
         
-        # Konfigurasi Safety (agar tidak terlalu restriktif untuk analisis kebijakan)
-        self.safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        }
-
+        # Initialize agents
+        self.data_agent = DataRetrievalAgent(db)
+        self.analysis_agent = AnalysisAgent()
+        self.viz_agent = VisualizationAgent()
+        self.insight_agent = InsightGenerationAgent()
+    
+    def _is_data_query(self, query: str) -> bool:
+        """
+        Enhanced detection for data analysis queries
+        Returns True if query is asking for data/analysis
+        """
+        query_lower = query.lower()
+        
+        # Data query indicators (expanded)
+        data_keywords = [
+            # Pertanyaan jumlah
+            'berapa', 'jumlah', 'total', 'banyak', 'many', 'how much', 'how many',
+            
+            # Pertanyaan perbandingan
+            'bandingkan', 'compare', 'versus', 'vs', 'perbandingan', 'lebih besar', 'lebih kecil',
+            
+            # Pertanyaan ranking
+            'terbanyak', 'tertinggi', 'terendah', 'terbesar', 'terkecil', 'top', 'ranking', 
+            'urutan', 'urut', 'paling', 'most', 'least', 'highest', 'lowest',
+            
+            # Pertanyaan distribusi
+            'distribusi', 'sebaran', 'persebaran', 'komposisi', 'proporsi', 'persentase',
+            'bagaimana', 'how', 'distribution',
+            
+            # Pertanyaan spesifik
+            'provinsi mana', 'sektor apa', 'wilayah mana', 'daerah mana', 'which province',
+            'which sector', 'what sector', 'where',
+            
+            # Kata kunci analisis
+            'analisis', 'analyze', 'tren', 'trend', 'perkembangan', 'data', 'statistik',
+            'insight', 'laporan', 'report'
+        ]
+        
+        # Check if query contains any data keywords
+        has_data_keyword = any(keyword in query_lower for keyword in data_keywords)
+        
+        # Exclude conversational queries
+        conversational_only = [
+            'halo', 'hello', 'hi', 'hai', 'terima kasih', 'thank you', 'thanks',
+            'siapa kamu', 'who are you', 'apa itu', 'what is', 'tolong jelaskan'
+        ]
+        
+        is_conversational = any(keyword in query_lower for keyword in conversational_only)
+        
+        # Entity mentions (provinces, sectors)
+        has_province = any(prov in query_lower for prov in [
+            'aceh', 'sumut', 'sumbar', 'riau', 'jambi', 'sumsel', 'bengkulu', 'lampung',
+            'jakarta', 'jabar', 'jateng', 'jatim', 'yogya', 'banten', 'bali',
+            'kalimantan', 'sulawesi', 'papua', 'maluku', 'nusa tenggara'
+        ])
+        
+        has_sector = any(sector in query_lower for sector in [
+            'pertanian', 'pertambangan', 'industri', 'listrik', 'konstruksi',
+            'perdagangan', 'transportasi', 'hotel', 'restoran', 'akomodasi',
+            'informasi', 'keuangan', 'real estat', 'properti', 'pendidikan',
+            'kesehatan', 'sektor', 'lapangan usaha', 'kbli'
+        ])
+        
+        # Decision logic
+        if is_conversational and not (has_province or has_sector):
+            return False
+        
+        if has_data_keyword or has_province or has_sector:
+            return True
+        
+        return False
+    
     async def analyze_policy_query(
-        self, 
-        user_message: str,
-        session_id: str,
-        scraped_data: List[ScrapedData] = None  # Parameter ini sekarang diabaikan
+        self,
+        query: str,
+        language: str = "Indonesian",
+        scraped_data: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Data-driven policy analysis using multi-agent system with real Sensus data"""
+        """
+        Main analysis method with enhanced intent detection
+        """
         try:
-            # Import agents - MUST BE INSIDE METHOD to avoid circular imports
-            from data_agent import DataRetrievalAgent, AnalysisAgent
-            from visualization_agent import VisualizationAgent
-            from insight_agent import InsightGenerationAgent
-            from database import get_database
+            logger.info(f"Analyzing query: {query}")
             
-            if not self.api_key:
-                return await self._handle_error_scenario(user_message, "API Key missing")
+            # Check if this is a data query
+            is_data_query = self._is_data_query(query)
             
-            # Detect language
-            user_language = self._detect_language(user_message)
+            logger.info(f"Query classification: {'DATA_QUERY' if is_data_query else 'CONVERSATIONAL'}")
             
-            # Check if analysis-related
-            is_analysis_query = self._is_analysis_related_query(user_message)
+            if not is_data_query:
+                # Handle conversational queries
+                return await self._handle_conversational_query(query, language)
             
-            if not is_analysis_query:
-                # Handle conversational query
-                return await self._handle_conversational_query(user_message, user_language)
-            
-            # Initialize agents
-            db = await get_database()
-            data_agent = DataRetrievalAgent(db)
-            analysis_agent = AnalysisAgent()
-            viz_agent = VisualizationAgent()
-            insight_agent = InsightGenerationAgent()
-            
-            # AGENT 1: Understand query intent
-            intent = await data_agent.understand_query(user_message)
-            logger.info(f"Query intent: {intent.intent_type}, provinces: {intent.provinces}, sectors: {intent.sectors}")
-            
-            # AGENT 2: Retrieve data based on intent from initial_data collection
-            raw_data = await data_agent.get_data_by_intent(intent)
-            
-            if not raw_data:
+            # ENHANCED: Try to process as data query
+            try:
+                # Step 1: Understand intent
+                intent = await self.data_agent.understand_query(query)
+                logger.info(f"Intent detected: {intent.intent_type}, provinces={intent.provinces}, sectors={intent.sectors}")
+                
+                # Step 2: Get data
+                raw_data = await self.data_agent.get_data_by_intent(intent)
+                
+                if not raw_data:
+                    logger.warning("No data found, but attempting broader search...")
+                    
+                    # FALLBACK 1: Try without province filter
+                    if intent.provinces:
+                        intent.provinces = []
+                        raw_data = await self.data_agent.get_data_by_intent(intent)
+                    
+                    # FALLBACK 2: Try without sector filter
+                    if not raw_data and intent.sectors:
+                        intent.sectors = []
+                        raw_data = await self.data_agent.get_data_by_intent(intent)
+                    
+                    if not raw_data:
+                        # Last resort: Get all data
+                        logger.info("Fetching all data as last resort")
+                        intent = QueryIntent(intent_type='distribution')
+                        raw_data = await self.data_agent.get_data_by_intent(intent)
+                
+                if not raw_data:
+                    return {
+                        'message': 'Maaf, tidak ada data yang ditemukan untuk pertanyaan Anda. Silakan coba pertanyaan lain.',
+                        'visualizations': [],
+                        'insights': [],
+                        'policies': [],
+                        'supporting_data_count': 0
+                    }
+                
+                logger.info(f"Retrieved {len(raw_data)} documents")
+                
+                # Step 3: Aggregate data
+                aggregated = await self.data_agent.aggregate_data(raw_data, intent)
+                
+                # Step 4: Analyze
+                analysis = self.analysis_agent.analyze(aggregated, intent)
+                
+                # Step 5: Create visualizations
+                visualizations = self.viz_agent.create_visualizations(analysis, aggregated)
+                
+                # Step 6: Generate insights
+                insights_result = await self.insight_agent.generate_insights(
+                    analysis, aggregated, query, language
+                )
+                
+                # Step 7: Generate main response narrative
+                main_message = await self._generate_main_response(
+                    query, analysis, aggregated, insights_result, language
+                )
+                
                 return {
-                    'message': f'Maaf, tidak ditemukan data yang sesuai dengan pertanyaan Anda tentang "{user_message}". Silakan coba pertanyaan lain atau spesifikkan provinsi/sektor yang ingin dianalisis.',
-                    'data_availability': 'No matching data found in Sensus Ekonomi 2016',
-                    'insights': [
-                        'Coba spesifikkan nama provinsi (contoh: Jawa Barat, DKI Jakarta)',
-                        'Atau sebutkan sektor usaha tertentu (contoh: perdagangan, industri, konstruksi)'
-                    ],
-                    'policies': [],
-                    'visualizations': [],
-                    'supporting_data_count': 0
+                    'message': main_message,
+                    'visualizations': [viz.dict() for viz in visualizations],
+                    'insights': insights_result.get('insights', []),
+                    'policies': insights_result.get('policies', []),
+                    'supporting_data_count': len(raw_data)
                 }
-            
-            # AGENT 3: Aggregate data
-            aggregated_data = await data_agent.aggregate_data(raw_data, intent)
-            logger.info(f"Aggregated data type: {aggregated_data.get('type')}")
-            
-            # AGENT 4: Analyze data
-            analysis = analysis_agent.analyze(aggregated_data, intent)
-            logger.info(f"Analysis completed with {len(analysis)} metrics")
-            
-            # AGENT 5: Create visualizations
-            visualizations = viz_agent.create_visualizations(analysis, aggregated_data)
-            logger.info(f"Generated {len(visualizations)} visualizations")
-            
-            # AGENT 6: Generate insights & policy recommendations using Gemini
-            insights_result = await insight_agent.generate_insights(
-                analysis, 
-                aggregated_data,
-                user_message,
-                user_language
-            )
-            logger.info(f"Generated {len(insights_result.get('insights', []))} insights and {len(insights_result.get('policies', []))} policies")
-            
-            # Generate main narrative response using Gemini
-            main_response = await self._generate_main_response(
-                user_message,
-                analysis,
-                aggregated_data,
-                insights_result,
-                user_language
-            )
-            
-            return {
-                'message': main_response,
-                'data_availability': f'Data dari Sensus Ekonomi 2016: {len(raw_data)} provinsi',
-                'insights': insights_result.get('insights', []),
-                'policies': insights_result.get('policies', []),
-                'visualizations': visualizations,
-                'supporting_data_count': len(raw_data)
-            }
-            
+                
+            except Exception as e:
+                logger.error(f"Error in data analysis pipeline: {e}", exc_info=True)
+                # Don't give up - try conversational fallback
+                return await self._handle_conversational_query(query, language)
+        
         except Exception as e:
-            logger.error(f"Error in policy analysis: {e}", exc_info=True)
-            return await self._handle_error_scenario(user_message, str(e))
-
-
+            logger.error(f"Error in analyze_policy_query: {e}", exc_info=True)
+            return {
+                'message': f"Maaf, terjadi kesalahan: {str(e)}",
+                'visualizations': [],
+                'insights': [],
+                'policies': [],
+                'supporting_data_count': 0
+            }
+    
     async def _generate_main_response(
         self,
-        user_query: str,
+        query: str,
         analysis: Dict[str, Any],
-        aggregated_data: Dict[str, Any],
-        insights_result: Dict[str, Any],
+        aggregated: Dict[str, Any],
+        insights: Dict[str, Any],
         language: str
     ) -> str:
         """Generate main narrative response using Gemini"""
         
-        if not self.api_key:
-            return self._generate_fallback_response(analysis, aggregated_data)
-        
-        # Prepare comprehensive context
-        context = f"""
-    PERTANYAAN PENGGUNA: {user_query}
-
-    TIPE ANALISIS: {aggregated_data.get('type', 'unknown').upper()}
-
-    DATA STATISTIK:
-    {json.dumps(analysis, indent=2, ensure_ascii=False)}
-
-    INSIGHTS YANG DIHASILKAN:
-    {json.dumps(insights_result.get('insights', []), indent=2, ensure_ascii=False)}
-
-    TUGAS ANDA:
-    1. Buat narasi analisis yang komprehensif dan mudah dipahami dalam bahasa {language}
-    2. Gunakan angka statistik yang konkret dari data di atas
-    3. Jelaskan implikasi dan konteks ekonomi dari temuan
-    4. Berikan penjelasan yang actionable dan relevan
-    5. Jangan membuat data fiktif - hanya gunakan data yang disediakan
-    """
+        if not self.model:
+            return self._generate_fallback_response(analysis, aggregated)
         
         try:
-            model = genai.GenerativeModel(
-                model_name=self.model_name,
-                system_instruction=f"""Anda adalah ahli analisis data Sensus Ekonomi Indonesia dengan keahlian dalam:
-    - Interpretasi data statistik ekonomi
-    - Analisis pola ekonomi regional
-    - Memberikan konteks kebijakan ekonomi
-
-    Berikan penjelasan yang:
-    - Jelas dan profesional dalam bahasa {language}
-    - Menggunakan data konkret dari analisis
-    - Mudah dipahami oleh pembuat kebijakan dan publik umum
-    - Menghubungkan data dengan implikasi praktis"""
-            )
+            # Prepare context
+            context = {
+                'query': query,
+                'analysis': analysis,
+                'data_type': aggregated.get('type', 'unknown'),
+                'insights': insights.get('insights', [])
+            }
             
-            response = await model.generate_content_async(context)
-            return response.text
+            # Enhanced prompt
+            prompt = f"""Kamu adalah asisten analisis data Sensus Ekonomi Indonesia yang profesional.
+
+Pertanyaan user: "{query}"
+
+Data yang tersedia:
+{self._prepare_context_for_prompt(context)}
+
+Tugas kamu:
+1. Jawab pertanyaan user secara LANGSUNG dan SPESIFIK dengan data yang ada
+2. Berikan angka-angka konkret (jumlah usaha, persentase, ranking)
+3. Highlight insight penting dalam 2-3 kalimat
+4. Jangan sebutkan keterbatasan data atau menyuruh user ke BPS
+5. Gunakan bahasa yang mudah dipahami
+
+Format jawaban:
+- Paragraf pembuka: Jawaban langsung dengan angka
+- Paragraf analisis: Insight dan perbandingan
+- Paragraf penutup: Kesimpulan singkat
+
+Panjang: 3-5 kalimat maksimal.
+Bahasa: {language}
+"""
+            
+            response = self.model.generate_content(prompt)
+            return response.text.strip()
             
         except Exception as e:
-            logger.error(f"Error generating main response with Gemini: {e}")
-            return self._generate_fallback_response(analysis, aggregated_data)
-
-
-    def _generate_fallback_response(self, analysis: Dict[str, Any], data: Dict[str, Any]) -> str:
-        """Fallback response if Gemini fails"""
-        data_type = data.get('type', 'unknown')
+            logger.error(f"Error generating main response: {e}")
+            return self._generate_fallback_response(analysis, aggregated)
+    
+    def _prepare_context_for_prompt(self, context: Dict[str, Any]) -> str:
+        """Format context for LLM prompt"""
+        import json
+        
+        # Simplified context for better LLM comprehension
+        simplified = {
+            'tipe_analisis': context.get('data_type', 'unknown'),
+            'hasil_analisis': {}
+        }
+        
+        analysis = context.get('analysis', {})
+        
+        if 'top_provinces' in analysis:
+            simplified['hasil_analisis']['provinsi_teratas'] = analysis['top_provinces']
+        
+        if 'max_province' in analysis:
+            simplified['hasil_analisis']['provinsi_tertinggi'] = analysis['max_province']
+        
+        if 'distribution_detail' in analysis:
+            simplified['hasil_analisis']['distribusi_sektor'] = analysis['distribution_detail'][:5]  # Top 5
+        
+        if 'top_sector' in analysis:
+            simplified['hasil_analisis']['sektor_tertinggi'] = analysis['top_sector']
+        
+        return json.dumps(simplified, indent=2, ensure_ascii=False)
+    
+    def _generate_fallback_response(self, analysis: Dict[str, Any], aggregated: Dict[str, Any]) -> str:
+        """Generate response without LLM"""
+        
+        data_type = aggregated.get('type', 'unknown')
         
         if data_type == 'ranking':
             top_provinces = analysis.get('top_provinces', [])
-            if top_provinces and len(top_provinces) > 0:
+            if top_provinces:
                 top = top_provinces[0]
-                response = f"Berdasarkan data Sensus Ekonomi 2016, **{top['provinsi']}** menempati posisi teratas dengan **{top['total']:,} usaha** atau **{top['percentage']:.1f}%** dari total.\n\n"
-                
-                if len(top_provinces) > 1:
-                    response += "**Top 3 Provinsi:**\n"
-                    for i, prov in enumerate(top_provinces[:3], 1):
-                        response += f"{i}. {prov['provinsi']}: {prov['total']:,} usaha ({prov['percentage']:.1f}%)\n"
-                
-                concentration = analysis.get('concentration', 0)
-                response += f"\nKonsentrasi ekonomi cukup tinggi dengan 3 provinsi teratas menguasai **{concentration:.1f}%** dari total usaha."
-                
-                return response
-        
-        elif data_type == 'comparison':
-            max_prov = analysis.get('max_province')
-            min_prov = analysis.get('min_province')
-            avg = analysis.get('average', 0)
-            
-            if max_prov and min_prov:
-                response = f"**Perbandingan Jumlah Usaha:**\n\n"
-                response += f"- Tertinggi: **{max_prov.get('provinsi')}** dengan {max_prov.get('total', 0):,} usaha\n"
-                response += f"- Terendah: **{min_prov.get('provinsi')}** dengan {min_prov.get('total', 0):,} usaha\n"
-                response += f"- Rata-rata: **{avg:,.0f} usaha** per provinsi\n"
-                
-                gap = max_prov.get('total', 0) - min_prov.get('total', 0)
-                response += f"\nKesenjangan: **{gap:,} usaha** antara provinsi tertinggi dan terendah."
-                
-                return response
+                return f"Berdasarkan data Sensus Ekonomi 2016, {top['provinsi']} memiliki jumlah usaha terbanyak dengan total {top['total']:,} unit usaha ({top['percentage']:.1f}% dari total nasional). Provinsi ini mendominasi perekonomian nasional di sektor yang dianalisis."
         
         elif data_type == 'distribution':
-            top_sector = analysis.get('top_sector')
-            total = analysis.get('total_usaha', 0)
-            
-            if top_sector:
-                code, info = top_sector
-                response = f"**Distribusi Usaha Per Sektor (Sensus Ekonomi 2016):**\n\n"
-                response += f"Sektor dominan: **{info['name']}** dengan {info['total']:,} usaha.\n\n"
-                response += f"Total usaha yang dianalisis: **{total:,}**\n"
-                
-                distribution_detail = analysis.get('distribution_detail', [])
-                if len(distribution_detail) > 1:
-                    response += f"\n**Top 5 Sektor:**\n"
-                    for i, sector in enumerate(distribution_detail[:5], 1):
-                        response += f"{i}. {sector['sector_name']}: {sector['total']:,} ({sector['percentage']:.1f}%)\n"
-                
-                return response
+            dist_detail = analysis.get('distribution_detail', [])
+            if dist_detail:
+                top_sector = dist_detail[0]
+                return f"Analisis distribusi menunjukkan bahwa sektor {top_sector['sector_name']} mendominasi dengan total {top_sector['total']:,} unit usaha ({top_sector['percentage']:.1f}% dari total). Sektor ini merupakan tulang punggung ekonomi Indonesia."
         
-        return "Analisis data telah selesai berdasarkan Sensus Ekonomi 2016. Silakan lihat visualisasi dan insight untuk detail lebih lanjut."
-
-
-    async def _handle_conversational_query(self, user_message: str, language: str) -> Dict[str, Any]:
-        """Handle non-analysis conversational queries"""
+        elif data_type == 'comparison':
+            max_prov = analysis.get('max_province', {})
+            if max_prov:
+                return f"Dari perbandingan data, {max_prov.get('provinsi', 'provinsi tertentu')} memiliki jumlah usaha tertinggi dengan {max_prov.get('total', 0):,} unit usaha. Data ini menunjukkan konsentrasi ekonomi yang signifikan di wilayah tersebut."
         
-        if not self.api_key:
+        return "Data telah berhasil dianalisis. Silakan lihat visualisasi dan insight untuk informasi lebih detail."
+    
+    async def _handle_conversational_query(self, query: str, language: str) -> Dict[str, Any]:
+        """Handle non-data queries conversationally"""
+        
+        if not self.model:
             return {
-                'message': "Halo! Saya adalah asisten analisis Sensus Ekonomi Indonesia. Apa yang bisa saya bantu?",
-                'data_availability': 'Not applicable for general conversation',
+                'message': "Halo! Saya asisten analisis Sensus Ekonomi Indonesia. Saya dapat membantu Anda menganalisis data ekonomi seperti jumlah usaha per provinsi, sektor dominan, perbandingan antar wilayah, dan trend ekonomi. Silakan ajukan pertanyaan Anda!",
+                'visualizations': [],
                 'insights': [],
                 'policies': [],
-                'visualizations': [],
                 'supporting_data_count': 0
             }
-        
-        system_prompt = f"""Anda adalah asisten ramah untuk Sensus Ekonomi Indonesia.
-
-    Tugas Anda:
-    - Jawab pertanyaan umum dengan ramah dalam bahasa {language}
-    - Jika pengguna bertanya tentang data atau analisis, arahkan mereka untuk bertanya spesifik
-    - Jangan generate visualisasi, insights, atau rekomendasi kebijakan untuk chat biasa
-
-    Contoh pertanyaan yang BUKAN analisis data:
-    - "Halo", "Apa kabar", "Terima kasih"
-    - "Apa itu sensus ekonomi?"
-    - "Bagaimana cara menggunakan aplikasi ini?"
-    """
         
         try:
-            model = genai.GenerativeModel(
-                model_name=self.model_name,
-                system_instruction=system_prompt
-            )
+            prompt = f"""Kamu adalah asisten analisis Sensus Ekonomi Indonesia yang ramah dan membantu.
+
+Pertanyaan user: "{query}"
+
+Tugas kamu:
+1. Jawab dengan ramah dan informatif
+2. Jika user bertanya tentang kemampuan, jelaskan bahwa kamu bisa:
+   - Analisis jumlah usaha per provinsi
+   - Perbandingan antar wilayah
+   - Distribusi per sektor KBLI
+   - Ranking dan statistik ekonomi
+3. Jika user menyapa, balas dengan ramah dan tawarkan bantuan
+4. Jangan buat asumsi tentang data yang tidak ada
+
+Bahasa: {language}
+Panjang: 2-3 kalimat.
+"""
             
-            response = await model.generate_content_async(user_message)
-            
+            response = self.model.generate_content(prompt)
             return {
-                'message': response.text,
-                'data_availability': 'Not applicable for general conversation',
+                'message': response.text.strip(),
+                'visualizations': [],
                 'insights': [],
                 'policies': [],
-                'visualizations': [],
                 'supporting_data_count': 0
             }
             
         except Exception as e:
-            logger.error(f"Error in conversational response: {e}")
+            logger.error(f"Error in conversational handler: {e}")
             return {
-                'message': "Maaf, saya mengalami kendala teknis. Silakan coba lagi atau ajukan pertanyaan analisis data.",
-                'data_availability': 'Error',
+                'message': "Halo! Ada yang bisa saya bantu terkait data Sensus Ekonomi Indonesia?",
+                'visualizations': [],
                 'insights': [],
                 'policies': [],
-                'visualizations': [],
                 'supporting_data_count': 0
             }
-            
-        except Exception as e:
-            logger.error(f"Error in policy analysis: {e}")
-            return await self._handle_error_scenario(user_message, str(e))
-
-    async def _handle_no_data_scenario(self, user_message: str, user_language: str = "English") -> Dict[str, Any]:
-        """Handle cases where no real data is available"""
-        
-        responses = {
-            "Spanish": {
-                'message': f"""No puedo proporcionar un análisis completo para su pregunta sobre "{user_message}" porque actualmente no hay datos relevantes en tiempo real disponibles en el sistema.""",
-                'insights': ['El análisis de políticas requiere acceso a datos actuales e históricos']
-            },
-            "English": {
-                'message': f"""I cannot provide a comprehensive analysis for your question about "{user_message}" because no relevant real-time data is currently available in the system.""",
-                'insights': ['Policy analysis requires access to current and historical data']
-            },
-            "Indonesian": {
-                'message': f"""Saya tidak dapat memberikan analisis komprehensif untuk pertanyaan Anda tentang "{user_message}" karena saat ini tidak ada data real-time yang relevan tersedia di sistem.
-
-Untuk memberikan analisis kebijakan yang akurat, saya memerlukan akses ke indikator ekonomi terkini, data hasil kebijakan, dan temuan penelitian yang relevan.""",
-                'insights': [
-                    'Analisis kebijakan memerlukan akses ke data terkini dan historis',
-                    'Analisis yang efektif membutuhkan berbagai sumber data untuk validasi',
-                    'Ketersediaan data berdampak langsung pada kualitas dan keandalan analisis'
-                ]
-            }
-        }
-        
-        response = responses.get(user_language, responses["English"])
-        
-        return {
-            'message': response['message'],
-            'data_availability': 'No relevant data currently available',
-            'insights': response['insights'],
-            'policies': [],
-            'visualizations': [],
-            'supporting_data_count': 0
-        }
 
     async def _handle_error_scenario(self, user_message: str, error: str) -> Dict[str, Any]:
         """Handle error scenarios transparently"""
