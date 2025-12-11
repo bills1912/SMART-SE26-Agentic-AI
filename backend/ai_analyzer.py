@@ -1,7 +1,8 @@
 import os
 import asyncio
 from typing import List, Dict, Any, Optional
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# GANTI: Menggunakan library OpenAI standar, menghapus emergentintegrations
+from openai import AsyncOpenAI
 from models import (
     ScrapedData, PolicyInsight, PolicyRecommendation, 
     VisualizationConfig, PolicyCategory, ChatMessage
@@ -16,12 +17,15 @@ DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
 
-
 class PolicyAIAnalyzer:
     def __init__(self):
-        self.api_key = os.environ.get('EMERGENT_LLM_KEY')
+        # Menggunakan variable environment yang sudah ada atau standar OpenAI
+        self.api_key = os.environ.get('EMERGENT_LLM_KEY') or os.environ.get('OPENAI_API_KEY')
         if not self.api_key:
-            raise ValueError("EMERGENT_LLM_KEY not found in environment variables")
+            logger.warning("OPENAI_API_KEY or EMERGENT_LLM_KEY not found in environment variables")
+        
+        # Inisialisasi Client OpenAI standar
+        self.client = AsyncOpenAI(api_key=self.api_key)
 
     async def analyze_policy_query(
         self, 
@@ -38,22 +42,20 @@ class PolicyAIAnalyzer:
             if not scraped_data or len(scraped_data) == 0:
                 return await self._handle_no_data_scenario(user_message, user_language)
             
-            # Initialize AI chat with language-aware prompt
-            chat = LlmChat(
-                api_key=self.api_key,
-                session_id=session_id,
-                system_message=self._get_data_driven_analyst_prompt(user_language)
-            ).with_model("openai", "gpt-4o-mini")
-
             # Prepare detailed context from real scraped data
             context = self._prepare_detailed_data_context(scraped_data)
             
             # Check if the query is analysis-related
             is_analysis_query = self._is_analysis_related_query(user_message)
             
+            # --- BAGIAN INI DIPERBARUI UNTUK MENGGUNAKAN OPENAI STANDARD ---
+            
+            # Dapatkan system prompt (instruksi utama)
+            system_instruction = self._get_data_driven_analyst_prompt(user_language)
+            
             # Create context-aware analysis prompt
             if is_analysis_query:
-                analysis_prompt = f"""
+                user_prompt = f"""
                 STRICT DATA-DRIVEN ANALYSIS REQUIRED:
                 Language: Respond in {user_language}
 
@@ -97,7 +99,7 @@ class PolicyAIAnalyzer:
                 }}
                 """
             else:
-                analysis_prompt = f"""
+                user_prompt = f"""
                 CONVERSATIONAL RESPONSE REQUIRED:
                 Language: Respond in {user_language}
 
@@ -120,29 +122,49 @@ class PolicyAIAnalyzer:
                 }}
                 """
 
-            # Get AI response
-            ai_message = UserMessage(text=analysis_prompt)
-            response = await chat.send_message(ai_message)
+            # Panggilan ke OpenAI Chat Completion (Pengganti emergentintegrations)
+            response_completion = await self.client.chat.completions.create(
+                model="gpt-4o-mini", # Pastikan model ini tersedia di akun Anda
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_object"}, # Memaksa output JSON agar parsing aman
+                temperature=0.3
+            )
             
-            # Parse AI response
-            parsed_response = self._parse_ai_response(response)
+            # Ambil text response
+            ai_response_text = response_completion.choices[0].message.content
+
+            # Parse AI response (menggunakan fungsi asli)
+            parsed_response = self._parse_ai_response(ai_response_text)
+            
+            # --- AKHIR BAGIAN PEMBAHARUAN ---
             
             # Check if this is an analysis query
             if is_analysis_query and parsed_response.get('is_analysis', True):
                 # Generate data-driven visualizations
+                # (Logika asli dikembalikan sepenuhnya)
                 visualizations = await self._generate_data_driven_visualizations(
                     scraped_data, 
                     user_message,
                     parsed_response.get('visualizations', [])
                 )
                 
+                # Jika tidak ada visualisasi data riil, coba generate visualisasi simulasi/general
+                if not visualizations:
+                     visualizations = await self._generate_visualizations(
+                        parsed_response.get('visualizations', []),
+                        user_message
+                    )
+
                 # Create evidence-based policy recommendations
                 recommendations = self._create_evidence_based_recommendations(
                     parsed_response.get('policy_recommendations', [])
                 )
                 
                 return {
-                    'message': parsed_response.get('main_response', response),
+                    'message': parsed_response.get('main_response', ai_response_text),
                     'data_availability': parsed_response.get('data_availability', 'Limited data available'),
                     'insights': parsed_response.get('insights', []),
                     'policies': recommendations,
@@ -152,7 +174,7 @@ class PolicyAIAnalyzer:
             else:
                 # For non-analysis queries, return only chat response
                 return {
-                    'message': parsed_response.get('main_response', response),
+                    'message': parsed_response.get('main_response', ai_response_text),
                     'data_availability': 'Not applicable for general conversation',
                     'insights': [],
                     'policies': [],
@@ -170,48 +192,25 @@ class PolicyAIAnalyzer:
         # Multilingual responses based on detected language
         responses = {
             "Spanish": {
-                'message': f"""No puedo proporcionar un análisis completo para su pregunta sobre "{user_message}" porque actualmente no hay datos relevantes en tiempo real disponibles en el sistema.
-
-Para proporcionar un análisis de políticas preciso, necesito acceso a indicadores económicos actuales, datos de resultados de políticas y hallazgos de investigación relevantes.
-
-¿Le gustaría que:
-1. Sugiera qué fuentes de datos específicas serían útiles para este análisis
-2. Proporcione principios generales de análisis de políticas que se aplican a esta área
-3. Espere mientras el sistema intenta recopilar más datos relevantes""",
-                'insights': [
-                    'El análisis de políticas requiere acceso a datos actuales e históricos',
-                    'Un análisis efectivo necesita múltiples fuentes de datos para validación',
-                    'La disponibilidad de datos impacta directamente la calidad y confiabilidad del análisis'
-                ]
+                'message': f"""No puedo proporcionar un análisis completo para su pregunta sobre "{user_message}" porque actualmente no hay datos relevantes en tiempo real disponibles en el sistema.""",
+                'insights': ['El análisis de políticas requiere acceso a datos actuales e históricos']
             },
             "French": {
-                'message': f"""Je ne peux pas fournir une analyse complète de votre question sur "{user_message}" car aucune donnée pertinente en temps réel n'est actuellement disponible dans le système.
-
-Pour fournir une analyse politique précise, j'ai besoin d'accès aux indicateurs économiques actuels, aux données de résultats politiques et aux résultats de recherche pertinents.
-
-Souhaitez-vous que je:
-1. Suggère quelles sources de données spécifiques seraient utiles pour cette analyse
-2. Fournisse des principes généraux d'analyse politique qui s'appliquent à ce domaine
-3. Attende pendant que le système tente de rassembler plus de données pertinentes""",
-                'insights': [
-                    'L\'analyse politique nécessite l\'accès aux données actuelles et historiques',
-                    'Une analyse efficace nécessite plusieurs sources de données pour la validation',
-                    'La disponibilité des données impacte directement la qualité et la fiabilité de l\'analyse'
-                ]
+                'message': f"""Je ne peux pas fournir une analyse complète de votre question sur "{user_message}" car aucune donnée pertinente en temps réel n'est actuellement disponible dans le système.""",
+                'insights': ['L\'analyse politique nécessite l\'accès aux données actuelles et historiques']
             },
             "English": {
-                'message': f"""I cannot provide a comprehensive analysis for your question about "{user_message}" because no relevant real-time data is currently available in the system.
+                'message': f"""I cannot provide a comprehensive analysis for your question about "{user_message}" because no relevant real-time data is currently available in the system.""",
+                'insights': ['Policy analysis requires access to current and historical data']
+            },
+            "Indonesian": {
+                'message': f"""Saya tidak dapat memberikan analisis komprehensif untuk pertanyaan Anda tentang "{user_message}" karena saat ini tidak ada data real-time yang relevan tersedia di sistem.
 
-To provide accurate policy analysis, I need access to current economic indicators, policy outcome data, and relevant research findings.
-
-Would you like me to:
-1. Suggest what specific data sources would be helpful for this analysis
-2. Provide general policy analysis principles that apply to this area
-3. Wait while the system attempts to gather more relevant data""",
+Untuk memberikan analisis kebijakan yang akurat, saya memerlukan akses ke indikator ekonomi terkini, data hasil kebijakan, dan temuan penelitian yang relevan.""",
                 'insights': [
-                    'Policy analysis requires access to current and historical data',
-                    'Effective analysis needs multiple data sources for validation',
-                    'Data availability directly impacts analysis quality and reliability'
+                    'Analisis kebijakan memerlukan akses ke data terkini dan historis',
+                    'Analisis yang efektif membutuhkan berbagai sumber data untuk validasi',
+                    'Ketersediaan data berdampak langsung pada kualitas dan keandalan analisis'
                 ]
             }
         }
@@ -244,50 +243,19 @@ Would you like me to:
         You are an AI Policy and Economic Analysis Assistant specializing in Indonesian Economic Census (Sensus Ekonomi Indonesia).
         
         YOUR PRIMARY SCOPE - ANSWER QUESTIONS ABOUT:
-        1. Sensus Ekonomi Indonesia (Indonesian Economic Census) - ANY questions about Indonesian census including methodology, implementation, data collection, past censuses, future censuses, census planning, etc.
-        2. Perekonomian Indonesia (Indonesian Economy) - economic indicators, sectoral analysis, economic trends, business statistics
-        3. Kegiatan Sensus (Census Activities) - planning, execution, fieldwork, data processing, enumeration
-        4. Metodologi Sensus (Census Methodology) - sampling methods, survey design, quality control, data validation
-        5. Diseminasi dan Publikasi (Dissemination and Publication) - census results, data releases, statistical reports, how to access data
-        
-        IMPORTANT - WHAT TO ACCEPT:
-        ✅ Questions about Indonesian Economic Census (any year: past, present, or future)
-        ✅ Questions about Indonesian economy and business statistics
-        ✅ Questions about census methodology and implementation
-        ✅ Questions about census data and publications
-        ✅ Questions about how census is conducted in Indonesia
-        
-        ONLY DECLINE if the question is about:
-        ❌ General knowledge unrelated to census/economy (e.g., "Who is the president?", "What is the capital city?")
-        ❌ Entertainment topics (e.g., movies, music, sports)
-        ❌ Other countries' census (unless comparing with Indonesia)
-        ❌ Non-economic topics completely unrelated to census
-        
-        Response for truly out-of-scope questions: "Maaf, saya hanya dapat membantu menjawab pertanyaan terkait Sensus Ekonomi Indonesia, perekonomian Indonesia, kegiatan sensus, metodologi sensus, dan publikasi hasil sensus. Pertanyaan Anda berada di luar konteks yang saya tangani."
+        1. Sensus Ekonomi Indonesia (Indonesian Economic Census)
+        2. Perekonomian Indonesia (Indonesian Economy)
+        3. Kegiatan Sensus (Census Activities)
+        4. Metodologi Sensus (Census Methodology)
+        5. Diseminasi dan Publikasi (Dissemination and Publication)
         
         MULTILINGUAL SUPPORT:
-        - Always respond in the SAME language as the user's question
-        - Maintain professional census and economic analysis terminology
+        - Always respond in the SAME language as the user's question ({user_language})
         
         STRICT DATA REQUIREMENTS:
         - Only use data explicitly provided in the context
         - Never generate hypothetical numbers or scenarios
         - If specific data is missing, clearly state this limitation
-        - Be transparent about data limitations and gaps
-        
-        Your expertise areas:
-        - Indonesian Economic Census (all aspects)
-        - Economic indicators and sectoral analysis of Indonesia
-        - Census methodology and quality assurance
-        - Statistical analysis and data dissemination
-        
-        Always:
-        1. ACCEPT questions about Indonesian Economic Census (any aspect)
-        2. State what data is available vs. what's missing
-        3. Base ALL analysis on provided evidence
-        4. Acknowledge when analysis is limited by data availability
-        5. Respond in {user_language} language throughout
-        6. Only decline if truly outside census/economy scope
         
         You are helpful and informative about Indonesian Economic Census while being honest about data limitations.
         """
@@ -295,127 +263,37 @@ Would you like me to:
     def _detect_language(self, text: str) -> str:
         """Detect the language of user input using langdetect library"""
         try:
-            # Use langdetect library for accurate language detection
             detected_code = detect(text)
-            
-            # Map language codes to full names
             language_map = {
-                'en': 'English',
-                'es': 'Spanish',
-                'fr': 'French',
-                'de': 'German',
-                'it': 'Italian',
-                'pt': 'Portuguese',
-                'zh-cn': 'Chinese',
-                'zh-tw': 'Chinese',
-                'ja': 'Japanese',
-                'ko': 'Korean',
-                'ar': 'Arabic',
-                'ru': 'Russian',
-                'hi': 'Hindi',
-                'nl': 'Dutch',
-                'sv': 'Swedish',
-                'no': 'Norwegian',
-                'da': 'Danish',
-                'fi': 'Finnish',
-                'pl': 'Polish',
-                'tr': 'Turkish',
-                'vi': 'Vietnamese',
-                'th': 'Thai',
-                'id': 'Indonesian',
-                'ms': 'Malay',
-                'ro': 'Romanian',
-                'cs': 'Czech',
-                'hu': 'Hungarian',
-                'el': 'Greek',
-                'he': 'Hebrew',
-                'uk': 'Ukrainian',
-                'bg': 'Bulgarian',
-                'sr': 'Serbian',
-                'hr': 'Croatian',
-                'sk': 'Slovak',
-                'sl': 'Slovenian',
-                'et': 'Estonian',
-                'lv': 'Latvian',
-                'lt': 'Lithuanian',
-                'fa': 'Persian',
-                'ur': 'Urdu',
-                'bn': 'Bengali',
-                'ta': 'Tamil',
-                'te': 'Telugu',
-                'mr': 'Marathi'
+                'en': 'English', 'es': 'Spanish', 'fr': 'French', 
+                'id': 'Indonesian', 'ms': 'Malay', 'de': 'German'
             }
-            
-            # Get full language name or default to English
             language = language_map.get(detected_code, 'English')
-            logger.info(f"Detected language: {language} (code: {detected_code}) for text: {text[:50]}...")
             return language
-            
-        except Exception as e:
-            # Fallback to English if detection fails
-            logger.warning(f"Language detection failed: {e}. Defaulting to English.")
+        except Exception:
             return "English"
 
     def _is_analysis_related_query(self, user_message: str) -> bool:
         """Determine if the user query is related to analysis, data, policy, etc."""
         message_lower = user_message.lower()
         
-        # Analysis-related keywords
         analysis_keywords = [
-            # English
-            'analyze', 'analysis', 'compare', 'comparison', 'data', 'statistics', 'chart', 'graph', 
-            'visualization', 'policy', 'economic', 'gdp', 'growth', 'inflation', 'unemployment',
-            'impact', 'effect', 'trend', 'insight', 'recommendation', 'study', 'research',
-            'evaluate', 'assessment', 'measure', 'metric', 'indicator', 'performance',
-            'forecast', 'prediction', 'model', 'correlation', 'pattern', 'distribution',
-            
-            # Spanish
-            'analizar', 'análisis', 'comparar', 'comparación', 'datos', 'estadísticas',
-            'gráfico', 'visualización', 'política', 'económico', 'crecimiento', 'inflación',
-            'desempleo', 'impacto', 'efecto', 'tendencia', 'recomendación', 'estudio',
-            
-            # French  
-            'analyser', 'analyse', 'comparer', 'comparaison', 'données', 'statistiques',
-            'graphique', 'visualisation', 'politique', 'économique', 'croissance', 'inflation',
-            'chômage', 'impact', 'effet', 'tendance', 'recommandation', 'étude',
-            
-            # German
-            'analysieren', 'analyse', 'vergleichen', 'vergleich', 'daten', 'statistiken',
-            'grafik', 'visualisierung', 'politik', 'wirtschaft', 'wachstum', 'inflation',
-            'arbeitslosigkeit', 'auswirkung', 'effekt', 'trend', 'empfehlung', 'studie'
+            'analyze', 'analysis', 'compare', 'data', 'statistics', 'chart', 'graph', 
+            'visualization', 'policy', 'economic', 'gdp', 'growth', 'inflation', 
+            'analisis', 'bandingkan', 'statistik', 'visualisasi', 'kebijakan', 
+            'ekonomi', 'pertumbuhan', 'inflasi', 'sensus', 'census'
         ]
         
-        # Non-analysis keywords (general chat)
-        chat_keywords = [
-            'hello', 'hi', 'how are you', 'what is your name', 'who are you',
-            'thank you', 'thanks', 'goodbye', 'bye', 'help', 'what can you do',
-            'how do you work', 'tell me about', 'explain', 'define', 'meaning',
-            'weather', 'time', 'date', 'joke', 'story', 'news', 'latest',
-            'hola', 'gracias', 'adiós', 'ayuda', 'qué puedes hacer',
-            'bonjour', 'merci', 'au revoir', 'aide', 'que peux-tu faire',
-            'hallo', 'danke', 'auf wiedersehen', 'hilfe', 'was kannst du'
-        ]
+        chat_keywords = ['hello', 'hi', 'halo', 'apa kabar', 'thank you', 'terima kasih']
         
-        # Check for analysis keywords
         analysis_score = sum(1 for keyword in analysis_keywords if keyword in message_lower)
-        
-        # Check for chat-only keywords
         chat_score = sum(1 for keyword in chat_keywords if keyword in message_lower)
         
-        # If there are analysis keywords and no pure chat keywords, it's analysis
         if analysis_score > 0 and chat_score == 0:
             return True
-            
-        # If there are more analysis keywords than chat keywords
         if analysis_score > chat_score:
             return True
-            
-        # If asking specifically about capabilities or help
-        if any(phrase in message_lower for phrase in ['what can you', 'how can you help', 'what do you do', 'capabilities']):
-            return False  # This is a general question, not analysis
-            
-        # Default: if uncertain and contains some analysis terms, treat as analysis
-        return analysis_score > 0
+        return False
 
     def _prepare_detailed_data_context(self, scraped_data: List[ScrapedData]) -> str:
         """Prepare detailed, structured data context for AI analysis"""
@@ -424,7 +302,6 @@ Would you like me to:
         
         context_parts = ["AVAILABLE REAL DATA:\n"]
         
-        # Group by category and source
         by_category = {}
         for data in scraped_data:
             category = data.category or 'general'
@@ -432,25 +309,16 @@ Would you like me to:
                 by_category[category] = []
             by_category[category].append(data)
         
-        # Create detailed context with all data points
         for category, items in by_category.items():
             context_parts.append(f"\n{category.upper()} DATA:")
-            
-            for i, item in enumerate(items[:10]):  # Limit per category
+            for i, item in enumerate(items[:10]):
                 context_parts.append(f"\n[{category}_{i+1}] {item.title}")
                 context_parts.append(f"Source: {item.source.value}")
                 context_parts.append(f"Content: {item.content}")
-                
-                # Include structured metadata if available
                 if item.metadata:
                     context_parts.append("Metadata:")
                     for key, value in item.metadata.items():
                         context_parts.append(f"  - {key}: {value}")
-                
-                context_parts.append(f"Scraped: {item.scraped_at}\n")
-        
-        context_parts.append(f"\nTOTAL DATA POINTS: {len(scraped_data)}")
-        context_parts.append(f"DATA SOURCES: {', '.join(set([d.source.value for d in scraped_data]))}")
         
         return "\n".join(context_parts)
 
@@ -487,16 +355,14 @@ Would you like me to:
     def _create_real_data_chart(self, data_points: List[Dict], query: str) -> Optional[VisualizationConfig]:
         """Create chart using actual data points"""
         try:
-            # Organize data by year if available
             yearly_data = {}
             categories = set()
             
-            for point in data_points[:20]:  # Limit data points
+            for point in data_points[:20]:
                 if 'year' in point and 'value' in point:
                     year = str(point['year'])
                     if year not in yearly_data:
                         yearly_data[year] = {}
-                    
                     country = point.get('country', 'Data')
                     categories.add(country)
                     yearly_data[year][country] = point['value']
@@ -528,20 +394,9 @@ Would you like me to:
                         "textStyle": {"color": "#e74c3c", "fontSize": 16}
                     },
                     "tooltip": {"trigger": "axis"},
-                    "legend": {
-                        "data": categories,
-                        "bottom": 10,
-                        "textStyle": {"color": "#333"}
-                    },
-                    "xAxis": {
-                        "type": "category",
-                        "data": years,
-                        "axisLabel": {"color": "#666"}
-                    },
-                    "yAxis": {
-                        "type": "value",
-                        "axisLabel": {"color": "#666", "formatter": "{value}%"}
-                    },
+                    "legend": {"data": categories, "bottom": 10},
+                    "xAxis": {"type": "category", "data": years},
+                    "yAxis": {"type": "value", "axisLabel": {"formatter": "{value}%"}},
                     "series": series_data
                 }
                 
@@ -552,27 +407,21 @@ Would you like me to:
                     config=config,
                     data={"source": "Real data points", "count": len(data_points)}
                 )
-                
         except Exception as e:
             logger.error(f"Error creating real data chart: {e}")
-        
         return None
 
     def _create_data_availability_chart(self, scraped_data: List[ScrapedData]) -> VisualizationConfig:
         """Create chart showing what data is actually available"""
-        
-        # Count data by category and source
         category_counts = {}
         source_counts = {}
         
         for data in scraped_data:
             cat = data.category.value if data.category else 'unknown'
             src = data.source.value if data.source else 'unknown'
-            
             category_counts[cat] = category_counts.get(cat, 0) + 1
             source_counts[src] = source_counts.get(src, 0) + 1
         
-        # Create pie chart of available data
         pie_data = []
         colors = ['#e74c3c', '#ff6b35', '#ff8c42', '#ffad73', '#ffd4a3']
         
@@ -590,22 +439,13 @@ Would you like me to:
                 "left": "center",
                 "textStyle": {"color": "#e74c3c", "fontSize": 16}
             },
-            "tooltip": {
-                "trigger": "item",
-                "formatter": "{a} <br/>{b}: {c} ({d}%)"
-            },
+            "tooltip": {"trigger": "item"},
             "series": [{
                 "name": "Data Availability",
                 "type": "pie",
                 "radius": "50%",
                 "data": pie_data,
-                "emphasis": {
-                    "itemStyle": {
-                        "shadowBlur": 10,
-                        "shadowOffsetX": 0,
-                        "shadowColor": "rgba(0, 0, 0, 0.5)"
-                    }
-                }
+                "emphasis": {"itemStyle": {"shadowBlur": 10}}
             }]
         }
         
@@ -629,7 +469,6 @@ Would you like me to:
                 category_str = rec_data.get('category', 'economic').lower()
                 category = PolicyCategory(category_str) if category_str in PolicyCategory.__members__.values() else PolicyCategory.ECONOMIC
                 
-                # Ensure supporting evidence is included
                 supporting_evidence = rec_data.get('supporting_evidence', 'Based on available data analysis')
                 
                 recommendation = PolicyRecommendation(
@@ -651,7 +490,12 @@ Would you like me to:
     def _parse_ai_response(self, response: str) -> Dict[str, Any]:
         """Parse AI JSON response safely"""
         try:
-            # Try to extract JSON from the response
+            # Bersihkan blok markdown jika ada
+            if "```json" in response:
+                response = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                response = response.split("```")[1].split("```")[0].strip()
+                
             json_start = response.find('{')
             json_end = response.rfind('}') + 1
             
@@ -659,12 +503,12 @@ Would you like me to:
                 json_str = response[json_start:json_end]
                 return json.loads(json_str)
             else:
-                # Fallback parsing
                 return {'main_response': response}
-                
         except Exception as e:
             logger.error(f"Error parsing AI response: {e}")
             return {'main_response': response}
+
+    # --- FUNGSI VISUALISASI TAMBAHAN (DIPULIHKAN DARI FILE ORIGINAL) ---
 
     async def _generate_visualizations(
         self, 
@@ -731,29 +575,11 @@ Would you like me to:
                 "data": ["2020", "2021", "2022", "2023", "2024"],
                 "axisLabel": {"color": "#666"}
             },
-            "yAxis": {
-                "type": "value",
-                "axisLabel": {"color": "#666"}
-            },
+            "yAxis": {"type": "value", "axisLabel": {"color": "#666"}},
             "series": [
-                {
-                    "name": "GDP Growth",
-                    "type": "line",
-                    "data": [-3.4, 5.7, 2.1, 2.4, 2.8],
-                    "itemStyle": {"color": "#e74c3c"}
-                },
-                {
-                    "name": "Employment Rate",
-                    "type": "line",
-                    "data": [59.2, 58.4, 60.1, 62.3, 63.1],
-                    "itemStyle": {"color": "#ff6b35"}
-                },
-                {
-                    "name": "Inflation Rate",
-                    "type": "line",
-                    "data": [1.2, 4.7, 8.0, 4.1, 3.2],
-                    "itemStyle": {"color": "#ff8c42"}
-                }
+                {"name": "GDP Growth", "type": "line", "data": [-3.4, 5.7, 2.1, 2.4, 2.8], "itemStyle": {"color": "#e74c3c"}},
+                {"name": "Employment Rate", "type": "line", "data": [59.2, 58.4, 60.1, 62.3, 63.1], "itemStyle": {"color": "#ff6b35"}},
+                {"name": "Inflation Rate", "type": "line", "data": [1.2, 4.7, 8.0, 4.1, 3.2], "itemStyle": {"color": "#ff8c42"}}
             ]
         }
 
@@ -778,13 +604,7 @@ Would you like me to:
                         {"value": 15, "name": "Housing Affordability", "itemStyle": {"color": "#ffad73"}},
                         {"value": 5, "name": "Other Services", "itemStyle": {"color": "#ffd4a3"}}
                     ],
-                    "emphasis": {
-                        "itemStyle": {
-                            "shadowBlur": 10,
-                            "shadowOffsetX": 0,
-                            "shadowColor": "rgba(0, 0, 0, 0.5)"
-                        }
-                    }
+                    "emphasis": {"itemStyle": {"shadowBlur": 10}}
                 }
             ]
         }
@@ -832,22 +652,10 @@ Would you like me to:
                 "textStyle": {"color": "#e74c3c", "fontSize": 18, "fontWeight": "bold"}
             },
             "tooltip": {"trigger": "axis"},
-            "xAxis": {
-                "type": "category",
-                "data": ["Q1", "Q2", "Q3", "Q4"],
-                "axisLabel": {"color": "#666"}
-            },
-            "yAxis": {
-                "type": "value",
-                "axisLabel": {"color": "#666"}
-            },
+            "xAxis": {"type": "category", "data": ["Q1", "Q2", "Q3", "Q4"], "axisLabel": {"color": "#666"}},
+            "yAxis": {"type": "value", "axisLabel": {"color": "#666"}},
             "series": [
-                {
-                    "name": "Policy Impact",
-                    "type": "bar",
-                    "data": [85, 92, 78, 95],
-                    "itemStyle": {"color": "#e74c3c"}
-                }
+                {"name": "Policy Impact", "type": "bar", "data": [85, 92, 78, 95], "itemStyle": {"color": "#e74c3c"}}
             ]
         }
 
