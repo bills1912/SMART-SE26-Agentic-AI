@@ -16,6 +16,7 @@ const ChatInterface: React.FC = () => {
   const { 
     currentSession, 
     addMessageToCurrentSession,
+    updateMessageInCurrentSession,
     createNewChat,
     exportCurrentChat
   } = useChat();
@@ -63,7 +64,7 @@ const ChatInterface: React.FC = () => {
       if (realMessages.length <= 2) {
         setTimeout(() => {
           scrollToTop();
-        }, 300); // Delay untuk smooth transition
+        }, 300);
       } else {
         // For subsequent messages, scroll to bottom
         scrollToBottom();
@@ -91,21 +92,107 @@ const ChatInterface: React.FC = () => {
     }
   };
   
-  const handleEditMessage = (messageId: string, newContent: string) => {
-    // Update message in current session
-    if (currentSession) {
-      const updatedMessages = currentSession.messages.map(msg => 
-        msg.id === messageId ? { ...msg, content: newContent } : msg
-      );
+  // Handle edit message - Claude style: edit and resubmit
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (!currentSession || !newContent.trim()) return;
+
+    // Find the message index
+    const messageIndex = currentSession.messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Update the message content
+    if (updateMessageInCurrentSession) {
+      updateMessageInCurrentSession(messageId, newContent);
+    }
+
+    // If it's a user message, we need to regenerate the AI response
+    const editedMessage = currentSession.messages[messageIndex];
+    if (editedMessage.sender === 'user') {
+      // Remove all messages after the edited message
+      // Then send the edited message as a new query
+      setIsLoading(true);
+
+      try {
+        // Call API with edited message
+        const response = await apiService.sendMessage(newContent, currentSession.id);
+        
+        // Create AI response message
+        const aiResponse: ChatMessage = {
+          id: response.session_id + '_' + Date.now(),
+          session_id: response.session_id,
+          sender: 'ai',
+          content: response.message,
+          timestamp: new Date(),
+          visualizations: response.visualizations || [],
+          insights: response.insights || [],
+          policies: response.policies || [],
+        };
+        
+        // Add AI response to session
+        addMessageToCurrentSession(aiResponse);
+        
+        toast({
+          title: "Message Updated",
+          description: "Your message has been edited and a new response generated.",
+        });
+
+      } catch (error: any) {
+        console.error('Error regenerating response:', error);
+        toast({
+          title: "Error",
+          description: "Failed to regenerate response. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // Handle regenerate AI response
+  const handleRegenerateResponse = async (messageId: string) => {
+    if (!currentSession || isLoading) return;
+
+    // Find the AI message
+    const aiMessageIndex = currentSession.messages.findIndex(msg => msg.id === messageId);
+    if (aiMessageIndex === -1) return;
+
+    // Find the preceding user message
+    let userMessage: ChatMessage | null = null;
+    for (let i = aiMessageIndex - 1; i >= 0; i--) {
+      if (currentSession.messages[i].sender === 'user') {
+        userMessage = currentSession.messages[i];
+        break;
+      }
+    }
+
+    if (!userMessage) return;
+
+    setIsLoading(true);
+
+    try {
+      // Call API to regenerate
+      const response = await apiService.sendMessage(userMessage.content, currentSession.id);
       
-      const updatedSession = {
-        ...currentSession,
-        messages: updatedMessages
-      };
+      // Update the AI message with new content
+      if (updateMessageInCurrentSession) {
+        updateMessageInCurrentSession(messageId, response.message);
+      }
       
-      // Here you could also call API to update on backend if needed
-      // For now, just update local state
-      console.log('Message edited:', messageId, newContent);
+      toast({
+        title: "Response Regenerated",
+        description: "A new response has been generated.",
+      });
+
+    } catch (error: any) {
+      console.error('Error regenerating response:', error);
+      toast({
+        title: "Error",
+        description: "Failed to regenerate response. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -223,7 +310,7 @@ const ChatInterface: React.FC = () => {
           sidebarOpen ? 'lg:ml-80' : 'lg:ml-16'
         }`}
       >
-        {/* Compact Header - Balanced size */}
+        {/* Compact Header */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1 sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div className="flex items-center justify-between">
             {/* Left: Mobile menu button + Title */}
@@ -253,14 +340,14 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Messages Area - Claude style: entire page scrolls OR Welcome Screen */}
+        {/* Chat Messages Area OR Welcome Screen */}
         {isNewChat ? (
-          /* New Chat Welcome Screen - Centered with fade out transition */
+          /* New Chat Welcome Screen */
           <div className="transition-all duration-700 ease-out">
             <NewChatWelcome />
           </div>
         ) : (
-          /* Normal Chat Messages - Fade in smoothly */
+          /* Normal Chat Messages */
           <div className="min-h-full transition-all duration-700 ease-in opacity-100">
             <div className="max-w-3xl mx-auto px-4 pt-3">
               <div className="space-y-6">
@@ -269,6 +356,7 @@ const ChatInterface: React.FC = () => {
                     key={message.id} 
                     message={message}
                     onEdit={handleEditMessage}
+                    onRegenerate={handleRegenerateResponse}
                   />
                 ))}
                 {isLoading && (
@@ -292,7 +380,7 @@ const ChatInterface: React.FC = () => {
           </div>
         )}
 
-        {/* Input Container - Centered for new chat, bottom for normal chat */}
+        {/* Input Container */}
         <div className={`sticky bottom-0 pb-4 transition-all duration-500 ${
           isNewChat 
             ? 'bg-transparent pt-3' 
@@ -301,9 +389,9 @@ const ChatInterface: React.FC = () => {
           <div className={`mx-auto px-4 transition-all duration-500 ${
             isNewChat ? 'max-w-2xl' : 'max-w-4xl'
           }`}>
-            {/* Single Input Container - Seamless tanpa separator, no focus artifacts */}
+            {/* Single Input Container */}
             <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
-              {/* Textarea Area - No borders, no transitions that show separator */}
+              {/* Textarea Area */}
               <div className="relative">
                 <textarea
                   ref={textareaRef}
@@ -323,7 +411,7 @@ const ChatInterface: React.FC = () => {
                 />
               </div>
 
-              {/* Controls Row - Seamless blend, no hover/focus borders */}
+              {/* Controls Row */}
               <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800">
                 {/* Left: Voice Recording Button */}
                 <div className="flex items-center">
@@ -351,7 +439,7 @@ const ChatInterface: React.FC = () => {
               </div>
             </div>
 
-            {/* Status Text - Terpisah di bawah input container */}
+            {/* Status Text */}
             <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-gray-500 dark:text-gray-400">
               {/* Left: Status Indicators */}
               <div className="flex items-center gap-3">

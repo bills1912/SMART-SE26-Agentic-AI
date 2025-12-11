@@ -10,7 +10,7 @@ module.exports = {
   devServer: {
     proxy: {
       '/api': {
-        target: 'https://chat-ui-improve-3.preview.emergentagent.com',
+        target: 'https://smart-se26-agentic-ai.onrender.com',
         changeOrigin: true,
         secure: false,
       },

@@ -12,6 +12,7 @@ interface ChatContextType {
   exportAllChats: () => void;
   loadChatHistory: () => Promise<void>;
   addMessageToCurrentSession: (message: ChatMessage) => void;
+  updateMessageInCurrentSession: (messageId: string, newContent: string) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -45,11 +46,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       setSessions(chatSessions);
       
       // Always start with a new empty chat
-      // This ensures welcome screen is shown on login or page load
       createNewChat();
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      // Even on error, create a new chat
       createNewChat();
     } finally {
       setIsLoading(false);
@@ -57,11 +56,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   };
 
   const createNewChat = () => {
-    // Create a new local session without welcome message - it will be created on backend when first message is sent
     const newSession: ChatSession = {
       id: '',
       title: 'Analisis Sensus Baru',
-      messages: [], // Empty - no welcome message
+      messages: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       metadata: {}
@@ -131,8 +129,48 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }
   };
 
+  // Update a message in the current session
+  const updateMessageInCurrentSession = (messageId: string, newContent: string) => {
+    if (currentSession) {
+      setCurrentSession(prevSession => {
+        if (!prevSession) return prevSession;
+        
+        const updatedMessages = prevSession.messages.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, content: newContent, timestamp: new Date() }
+            : msg
+        );
+        
+        return {
+          ...prevSession,
+          messages: updatedMessages,
+          updated_at: new Date().toISOString()
+        };
+      });
+
+      // Also update in sessions list
+      setSessions(prevSessions => {
+        if (!currentSession.id) return prevSessions;
+        
+        return prevSessions.map(session => {
+          if (session.id === currentSession.id) {
+            return {
+              ...session,
+              messages: session.messages.map(msg =>
+                msg.id === messageId
+                  ? { ...msg, content: newContent, timestamp: new Date() }
+                  : msg
+              ),
+              updated_at: new Date().toISOString()
+            };
+          }
+          return session;
+        });
+      });
+    }
+  };
+
   const generateSessionTitle = (firstMessage: string): string => {
-    // Generate a title from the first user message
     const words = firstMessage.split(' ').slice(0, 6).join(' ');
     return words.length > 50 ? words.substring(0, 47) + '...' : words;
   };
@@ -205,7 +243,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         exportCurrentChat,
         exportAllChats,
         loadChatHistory,
-        addMessageToCurrentSession
+        addMessageToCurrentSession,
+        updateMessageInCurrentSession
       }}
     >
       {children}
