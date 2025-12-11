@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, User, TrendingUp, FileText, Lightbulb, Copy, Edit2, Check, Download, X, RotateCcw } from 'lucide-react';
+import { Bot, User, TrendingUp, FileText, Lightbulb, Copy, Edit2, Check, Download, RotateCcw } from 'lucide-react';
 import { ChatMessage } from '../types/chat';
 import ContentButton from './ContentButton';
 import VisualizationModal from './VisualizationModal';
@@ -28,11 +28,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
   const [editedContent, setEditedContent] = useState(message.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  const formatTime = (date: Date | string) => {
+  const formatTime = (date: Date | string | undefined | null): string => {
+    if (!date) return '';
+    
     try {
       const dateObj = typeof date === 'string' ? new Date(date) : date;
+      if (isNaN(dateObj.getTime())) return '';
       return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
+    } catch {
       return '';
     }
   };
@@ -75,12 +78,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Save on Cmd/Ctrl + Enter
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSaveEdit();
     }
-    // Cancel on Escape
     if (e.key === 'Escape') {
       handleCancelEdit();
     }
@@ -88,10 +89,39 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setEditedContent(e.target.value);
-    // Auto-resize
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
+
+  // ============================================
+  // FIX: Helper functions to safely check arrays
+  // This prevents rendering "0" when backend sends 0 instead of []
+  // ============================================
+  
+  const getArrayLength = (arr: unknown): number => {
+    if (Array.isArray(arr)) {
+      return arr.length;
+    }
+    return 0;
+  };
+
+  const hasValidArray = (arr: unknown): boolean => {
+    return Array.isArray(arr) && arr.length > 0;
+  };
+
+  // Safe getters for arrays
+  const visualizationsCount = getArrayLength(message.visualizations);
+  const insightsCount = getArrayLength(message.insights);
+  const policiesCount = getArrayLength(message.policies);
+
+  // Check if has any content
+  const hasVisualizations = visualizationsCount > 0;
+  const hasInsights = insightsCount > 0;
+  const hasPolicies = policiesCount > 0;
+  const hasAnyAnalysis = hasVisualizations || hasInsights || hasPolicies;
+
+  // Get timestamp safely
+  const timestamp = formatTime(message.timestamp);
 
   return (
     <div className={`flex gap-4 ${isAI ? 'flex-row' : 'flex-row-reverse'}`}>
@@ -132,16 +162,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
                   autoFocus
                 />
                 
-                {/* Edit Action Buttons - Claude style */}
+                {/* Edit Action Buttons */}
                 <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-700">
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">⌘</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">⌘/Ctrl</kbd>
                     <span className="mx-1">+</span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Enter (for Mac OS)</kbd>
-                    <span className="mx-1">or</span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">ctrl</kbd>
-                    <span className="mx-1">+</span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Enter (for Windows)</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Enter</kbd>
                     <span className="ml-1">to save</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -167,19 +193,21 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
                 <div className={`whitespace-pre-wrap text-[15px] leading-relaxed ${isAI ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>
                   {message.content}
                 </div>
-                <div className={`text-xs mt-2 ${isAI ? 'text-gray-500 dark:text-gray-400' : 'text-red-100'}`}>
-                  {formatTime(message.timestamp)}
-                </div>
+                {/* Only show timestamp if valid */}
+                {timestamp ? (
+                  <div className={`text-xs mt-2 ${isAI ? 'text-gray-500 dark:text-gray-400' : 'text-red-100'}`}>
+                    {timestamp}
+                  </div>
+                ) : null}
               </>
             )}
           </div>
           
-          {/* Action Buttons - Show on hover (only when not editing) */}
+          {/* Action Buttons - Show on hover */}
           {!isEditing && (
             <div className={`absolute top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${
               isAI ? '-right-20' : '-left-20'
             }`}>
-              {/* Copy Button */}
               <button
                 onClick={handleCopy}
                 className="p-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-sm"
@@ -192,7 +220,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
                 )}
               </button>
               
-              {/* Edit Button - Only for user messages */}
               {!isAI && onEdit && (
                 <button
                   onClick={handleStartEdit}
@@ -203,7 +230,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
                 </button>
               )}
 
-              {/* Regenerate Button - Only for AI messages */}
               {isAI && onRegenerate && (
                 <button
                   onClick={() => onRegenerate(message.id)}
@@ -217,41 +243,39 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
           )}
         </div>
 
-        {/* Visualizations Button */}
-        {message.visualizations && message.visualizations.length > 0 && (
+        {/* Content Buttons - Only render if array has items */}
+        {hasVisualizations ? (
           <ContentButton
             icon={TrendingUp}
             title="Data Visualizations"
-            count={message.visualizations.length}
+            count={visualizationsCount}
             itemLabel="chart"
             onClick={() => setIsVizModalOpen(true)}
           />
-        )}
+        ) : null}
 
-        {/* Insights Button */}
-        {message.insights && message.insights.length > 0 && (
+        {hasInsights ? (
           <ContentButton
             icon={Lightbulb}
             title="Key Insights"
-            count={message.insights.length}
+            count={insightsCount}
             itemLabel="insight"
             onClick={() => setIsInsightsModalOpen(true)}
           />
-        )}
+        ) : null}
 
-        {/* Policy Recommendations Button */}
-        {message.policies && message.policies.length > 0 && (
+        {hasPolicies ? (
           <ContentButton
             icon={FileText}
             title="Policy Recommendations"
-            count={message.policies.length}
+            count={policiesCount}
             itemLabel="recommendation"
             onClick={() => setIsPolicyModalOpen(true)}
           />
-        )}
+        ) : null}
         
-        {/* Report Download Button - Only for AI messages with analysis */}
-        {isAI && message.session_id && (message.visualizations?.length || message.insights?.length || message.policies?.length) && (
+        {/* Report Button - Only if AI message with analysis */}
+        {isAI && message.session_id && hasAnyAnalysis ? (
           <ContentButton
             icon={Download}
             title="Unduh Laporan Lengkap"
@@ -259,26 +283,26 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
             itemLabel="report"
             onClick={() => setIsReportModalOpen(true)}
           />
-        )}
+        ) : null}
       </div>
 
       {/* Modals */}
       <VisualizationModal
         isOpen={isVizModalOpen}
         onClose={() => setIsVizModalOpen(false)}
-        visualizations={message.visualizations || []}
+        visualizations={Array.isArray(message.visualizations) ? message.visualizations : []}
       />
       
       <InsightsModal
         isOpen={isInsightsModalOpen}
         onClose={() => setIsInsightsModalOpen(false)}
-        insights={message.insights || []}
+        insights={Array.isArray(message.insights) ? message.insights : []}
       />
       
       <PolicyModal
         isOpen={isPolicyModalOpen}
         onClose={() => setIsPolicyModalOpen(false)}
-        policies={message.policies || []}
+        policies={Array.isArray(message.policies) ? message.policies : []}
       />
       
       <ReportModal
