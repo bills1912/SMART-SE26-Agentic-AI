@@ -53,7 +53,7 @@ if not mongo_url:
 policy_db = PolicyDatabase(mongo_url, db_name)
 
 # Inisialisasi AI & Report Generator
-ai_analyzer = PolicyAIAnalyzer()
+ai_analyzer = PolicyAIAnalyzer(policy_db)
 report_generator = ReportGenerator()
 
 # --- 5. SETUP APLIKASI FASTAPI ---
