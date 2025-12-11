@@ -102,3 +102,19 @@ class PolicyAnalysisResponse(BaseModel):
     insights: Optional[List[str]] = []
     policies: Optional[List[PolicyRecommendation]] = []
     supporting_data_count: int = 0
+    
+class SensusData(BaseModel):
+    id: str = Field(default_factory=lambda: str(datetime.utcnow().timestamp()))
+    provinsi: str
+    kode_provinsi: str
+    tahun: int
+    data_kbli: Dict[str, int]  # {'B': 1234, 'C': 5678, ...}
+    total_usaha: int
+    metadata: Dict[str, Any] = {}
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class QueryIntent(BaseModel):
+    intent_type: str  # 'comparison', 'ranking', 'trend', 'distribution'
+    provinces: List[str] = []
+    sectors: List[str] = []  # Kode KBLI
+    aggregation: str = 'sum'  # 'sum', 'average', 'count'

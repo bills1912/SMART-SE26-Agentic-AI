@@ -130,14 +130,16 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
         )
         await policy_db.save_chat_message(user_message)
         
-        # Get relevant data
-        scraped_data = await policy_db.search_scraped_data(request.message, limit=20)
+        # ========================================
+        # TIDAK PERLU SCRAPING - Langsung ke AI analyzer
+        # Data akan diambil dari collection initial_data
+        # ========================================
         
-        # Analyze with AI
+        # Analyze with AI using multi-agent system
         analysis_result = await ai_analyzer.analyze_policy_query(
             request.message,
             session_id,
-            scraped_data
+            scraped_data=None  # Parameter diabaikan, agents ambil dari initial_data
         )
         
         # Save AI response
@@ -155,10 +157,6 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
         if analysis_result.get('policies'):
             await policy_db.save_policy_recommendations(analysis_result['policies'])
         
-        # Trigger background scraping if idle
-        if not scraping_in_progress:
-            background_tasks.add_task(trigger_data_scraping)
-        
         return PolicyAnalysisResponse(
             message=analysis_result['message'],
             session_id=session_id,
@@ -169,7 +167,7 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
         )
         
     except Exception as e:
-        logger.error(f"Error in policy analysis: {e}")
+        logger.error(f"Error in policy analysis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error analyzing policy: {str(e)}")
 
 @api_router.get("/sessions", response_model=List[ChatSession])
