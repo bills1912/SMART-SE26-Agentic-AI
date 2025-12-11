@@ -7,6 +7,15 @@ const config = {
 };
 
 module.exports = {
+  devServer: {
+    proxy: {
+      '/api': {
+        target: 'https://chat-ui-improve-3.preview.emergentagent.com',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
