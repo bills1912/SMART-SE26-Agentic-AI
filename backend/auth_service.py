@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 class AuthService:
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
-        self.session_duration_days = 7
+        self.session_duration_days = 30  # Extended from 7 to 30 days
+        self.session_refresh_threshold_days = 7  # Auto-refresh if less than 7 days remaining
         self.emergent_auth_url = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
     def generate_user_id(self) -> str:
@@ -57,33 +58,77 @@ class AuthService:
             )
             
             if not session_doc:
+                logger.debug(f"Session not found: {session_token[:20]}...")
                 return None
             
-            # Check expiration
-            expires_at = session_doc["expires_at"]
+            # Check expiration with proper timezone handling
+            expires_at = session_doc.get("expires_at")
+            if expires_at is None:
+                logger.warning(f"Session has no expires_at field")
+                return None
+            
+            # Handle different datetime formats
             if isinstance(expires_at, str):
-                expires_at = datetime.fromisoformat(expires_at)
+                try:
+                    # Try ISO format first
+                    expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                except ValueError:
+                    # Try other common formats
+                    try:
+                        expires_at = datetime.strptime(expires_at, "%Y-%m-%dT%H:%M:%S.%f")
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        logger.error(f"Cannot parse expires_at: {expires_at}")
+                        return None
+            
+            # Ensure timezone aware
             if expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=timezone.utc)
             
-            if expires_at < datetime.now(timezone.utc):
+            now = datetime.now(timezone.utc)
+            
+            # Check if expired
+            if expires_at < now:
+                logger.info(f"Session expired at {expires_at}, current time {now}")
                 # Delete expired session
                 await self.db.user_sessions.delete_one({"session_token": session_token})
                 return None
             
-            # Get user
+            # Session is valid, get user
             user_doc = await self.db.users.find_one(
                 {"user_id": session_doc["user_id"]},
                 {"_id": 0}
             )
             
             if not user_doc:
+                logger.warning(f"User not found for session: {session_doc['user_id']}")
                 return None
+            
+            # Auto-extend session if it's going to expire within threshold
+            time_until_expiry = expires_at - now
+            if time_until_expiry < timedelta(days=self.session_refresh_threshold_days):
+                new_expires_at = now + timedelta(days=self.session_duration_days)
+                await self.db.user_sessions.update_one(
+                    {"session_token": session_token},
+                    {
+                        "$set": {
+                            "expires_at": new_expires_at,
+                            "last_activity": now
+                        }
+                    }
+                )
+                logger.info(f"Extended session for user {session_doc['user_id']} to {new_expires_at}")
+            else:
+                # Just update last activity
+                await self.db.user_sessions.update_one(
+                    {"session_token": session_token},
+                    {"$set": {"last_activity": now}}
+                )
             
             return User(**user_doc)
             
         except Exception as e:
-            logger.error(f"Error verifying session: {e}")
+            logger.error(f"Error verifying session: {e}", exc_info=True)
             return None
 
     async def authenticate_user(self, request: Request) -> User:
@@ -103,14 +148,15 @@ class AuthService:
     async def process_emergent_oauth(self, session_id: str) -> Dict[str, Any]:
         """Process Emergent OAuth session ID and get user data"""
         try:
-            async with httpx.AsyncClient() as client:
+            # Use longer timeout for OAuth
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     self.emergent_auth_url,
                     headers={"X-Session-ID": session_id},
-                    timeout=10.0
                 )
                 
                 if response.status_code != 200:
+                    logger.error(f"Emergent OAuth failed: {response.status_code} - {response.text}")
                     raise HTTPException(
                         status_code=response.status_code,
                         detail="Failed to fetch session data from Emergent"
@@ -118,6 +164,9 @@ class AuthService:
                 
                 return response.json()
         
+        except httpx.TimeoutException as e:
+            logger.error(f"OAuth timeout: {e}")
+            raise HTTPException(status_code=504, detail="OAuth service timeout")
         except httpx.HTTPError as e:
             logger.error(f"HTTP error during OAuth: {e}")
             raise HTTPException(status_code=500, detail="OAuth service unavailable")
@@ -125,6 +174,7 @@ class AuthService:
     async def create_or_update_user_from_oauth(self, oauth_data: Dict[str, Any]) -> User:
         """Create or update user from OAuth data"""
         email = oauth_data["email"]
+        now = datetime.now(timezone.utc)
         
         # Check if user exists
         existing_user = await self.db.users.find_one(
@@ -139,10 +189,14 @@ class AuthService:
                 {
                     "$set": {
                         "name": oauth_data["name"],
-                        "picture": oauth_data.get("picture")
+                        "picture": oauth_data.get("picture"),
+                        "last_login": now
                     }
                 }
             )
+            # Refresh the user data
+            existing_user["name"] = oauth_data["name"]
+            existing_user["picture"] = oauth_data.get("picture")
             return User(**existing_user)
         else:
             # Create new user
@@ -152,7 +206,8 @@ class AuthService:
                 "email": email,
                 "name": oauth_data["name"],
                 "picture": oauth_data.get("picture"),
-                "created_at": datetime.now(timezone.utc)
+                "created_at": now,
+                "last_login": now
             }
             await self.db.users.insert_one(new_user)
             return User(**new_user)
@@ -160,31 +215,47 @@ class AuthService:
     async def create_session(self, user_id: str, response: Response, oauth_session_token: Optional[str] = None) -> str:
         """Create new session for user and set cookie"""
         session_token = oauth_session_token or self.generate_session_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=self.session_duration_days)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=self.session_duration_days)
         
         # Store session in database
-        await self.db.user_sessions.insert_one({
+        session_doc = {
             "user_id": user_id,
             "session_token": session_token,
             "expires_at": expires_at,
-            "created_at": datetime.now(timezone.utc)
-        })
+            "created_at": now,
+            "last_activity": now
+        }
         
-        # Set httpOnly cookie
+        # Use upsert to handle duplicate session tokens
+        await self.db.user_sessions.update_one(
+            {"session_token": session_token},
+            {"$set": session_doc},
+            upsert=True
+        )
+        
+        # Determine if we're in production (HTTPS)
+        is_production = os.environ.get('ENVIRONMENT', 'development') == 'production'
+        
+        # Set httpOnly cookie with proper settings
         response.set_cookie(
             key="session_token",
             value=session_token,
             httponly=True,
-            secure=False,  # Set to True in production with HTTPS
+            secure=is_production,  # True in production with HTTPS
             samesite="lax",
             path="/",
-            max_age=self.session_duration_days * 24 * 60 * 60
+            max_age=self.session_duration_days * 24 * 60 * 60,  # 30 days in seconds
+            expires=expires_at
         )
         
+        logger.info(f"Created session for user {user_id}, expires at {expires_at}")
         return session_token
 
     async def register_user(self, register_data: RegisterRequest) -> User:
         """Register new user with email/password"""
+        now = datetime.now(timezone.utc)
+        
         # Check if user exists
         existing_user = await self.db.users.find_one(
             {"email": register_data.email},
@@ -204,7 +275,8 @@ class AuthService:
             "name": register_data.name,
             "password": hashed_password,
             "picture": None,
-            "created_at": datetime.now(timezone.utc)
+            "created_at": now,
+            "last_login": now
         }
         
         await self.db.users.insert_one(new_user)
@@ -228,6 +300,12 @@ class AuthService:
         if not self.verify_password(login_data.password, user_doc.get("password", "")):
             return None
         
+        # Update last login
+        await self.db.users.update_one(
+            {"email": login_data.email},
+            {"$set": {"last_login": datetime.now(timezone.utc)}}
+        )
+        
         # Return user without password
         user_data = {k: v for k, v in user_doc.items() if k != "password"}
         return User(**user_data)
@@ -235,7 +313,23 @@ class AuthService:
     async def logout_user(self, session_token: str, response: Response):
         """Logout user by deleting session"""
         # Delete session from database
-        await self.db.user_sessions.delete_one({"session_token": session_token})
+        result = await self.db.user_sessions.delete_one({"session_token": session_token})
+        logger.info(f"Deleted {result.deleted_count} session(s)")
         
-        # Clear cookie
-        response.delete_cookie(key="session_token", path="/")
+        # Clear cookie with matching parameters
+        response.delete_cookie(
+            key="session_token",
+            path="/",
+            httponly=True,
+            samesite="lax"
+        )
+
+    async def cleanup_expired_sessions(self):
+        """Cleanup expired sessions - call this periodically"""
+        now = datetime.now(timezone.utc)
+        result = await self.db.user_sessions.delete_many({
+            "expires_at": {"$lt": now}
+        })
+        if result.deleted_count > 0:
+            logger.info(f"Cleaned up {result.deleted_count} expired sessions")
+        return result.deleted_count

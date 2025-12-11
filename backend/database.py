@@ -9,36 +9,70 @@ logger = logging.getLogger(__name__)
 
 class PolicyDatabase:
     def __init__(self, mongo_url: str, db_name: str):
-        # Menambahkan timeout server selection agar tidak hang jika koneksi lambat
+        # Optimized connection settings for better performance and reliability
         self.client = AsyncIOMotorClient(
             mongo_url,
-            serverSelectionTimeoutMS=5000,
+            serverSelectionTimeoutMS=30000,  # 30 seconds for initial connection
+            connectTimeoutMS=30000,          # 30 seconds connection timeout
+            socketTimeoutMS=60000,           # 60 seconds socket timeout for operations
+            maxPoolSize=50,                  # Connection pool size
+            minPoolSize=5,                   # Minimum connections to maintain
+            maxIdleTimeMS=60000,             # Close idle connections after 60s
+            retryWrites=True,                # Retry failed writes
+            retryReads=True,                 # Retry failed reads
+            waitQueueTimeoutMS=30000,        # Wait for connection from pool
             uuidRepresentation='standard'
         )
         self.db = self.client[db_name]
+        self._connected = False
         
     async def init_collections(self):
         """Initialize database collections with indexes"""
         try:
-            # Cek koneksi terlebih dahulu
+            # Test connection with ping
             await self.client.admin.command('ping')
+            self._connected = True
             logger.info("Successfully connected to MongoDB Atlas")
 
-            # Create indexes for better performance
-            await self.db.scraped_data.create_index("source")
-            await self.db.scraped_data.create_index("category") 
-            await self.db.scraped_data.create_index("scraped_at")
-            # Index text search untuk pencarian konten
-            await self.db.scraped_data.create_index([("title", "text"), ("content", "text")])
-            
-            await self.db.chat_sessions.create_index("created_at")
-            await self.db.chat_messages.create_index("session_id")
-            await self.db.chat_messages.create_index("timestamp")
-            
-            logger.info("Database collections initialized")
+            # Create indexes for better performance (run in background)
+            try:
+                await self.db.scraped_data.create_index("source", background=True)
+                await self.db.scraped_data.create_index("category", background=True)
+                await self.db.scraped_data.create_index("scraped_at", background=True)
+                
+                # Text search index
+                try:
+                    await self.db.scraped_data.create_index(
+                        [("title", "text"), ("content", "text")],
+                        background=True
+                    )
+                except Exception as e:
+                    # Text index might already exist
+                    logger.debug(f"Text index already exists or error: {e}")
+                
+                await self.db.chat_sessions.create_index("created_at", background=True)
+                await self.db.chat_sessions.create_index("updated_at", background=True)
+                await self.db.chat_messages.create_index("session_id", background=True)
+                await self.db.chat_messages.create_index("timestamp", background=True)
+                
+                # Auth indexes - critical for login performance
+                await self.db.users.create_index("email", unique=True, background=True)
+                await self.db.users.create_index("user_id", unique=True, background=True)
+                await self.db.user_sessions.create_index("session_token", unique=True, background=True)
+                await self.db.user_sessions.create_index("user_id", background=True)
+                await self.db.user_sessions.create_index("expires_at", background=True)
+                
+                logger.info("Database indexes created/verified")
+            except Exception as e:
+                logger.warning(f"Error creating some indexes (may already exist): {e}")
+                
         except Exception as e:
-            logger.error(f"Error connecting or initializing database: {e}")
+            logger.error(f"Error connecting to database: {e}")
             raise e
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
 
     # Scraped Data operations
     async def save_scraped_data(self, data: List[ScrapedData]) -> int:
@@ -87,28 +121,28 @@ class PolicyDatabase:
     async def search_scraped_data(self, query: str, limit: int = 50) -> List[ScrapedData]:
         """Search scraped data by text"""
         try:
-            # Menggunakan text index yang lebih efisien jika tersedia
-            text_query = {
-                "$text": {"$search": query}
-            }
-            # Fallback ke regex jika text index belum siap atau query spesifik
+            # Try text search first
+            text_query = {"$text": {"$search": query}}
+            
+            try:
+                cursor = self.db.scraped_data.find(text_query).limit(limit)
+                data = await cursor.to_list(length=limit)
+                if data:
+                    return [ScrapedData(**item) for item in data]
+            except Exception:
+                pass  # Text index might not exist
+            
+            # Fallback to regex search
             regex_query = {
                 "$or": [
                     {"title": {"$regex": query, "$options": "i"}},
                     {"content": {"$regex": query, "$options": "i"}}
                 ]
             }
-            
-            try:
-                cursor = self.db.scraped_data.find(text_query).limit(limit)
-                data = await cursor.to_list(length=limit)
-                if not data:
-                    raise Exception("No text match")
-            except:
-                cursor = self.db.scraped_data.find(regex_query).sort("scraped_at", -1).limit(limit)
-                data = await cursor.to_list(length=limit)
-
+            cursor = self.db.scraped_data.find(regex_query).sort("scraped_at", -1).limit(limit)
+            data = await cursor.to_list(length=limit)
             return [ScrapedData(**item) for item in data]
+            
         except Exception as e:
             logger.error(f"Error searching scraped data: {e}")
             return []
@@ -204,6 +238,8 @@ class PolicyDatabase:
             stats["chat_messages_count"] = await self.db.chat_messages.count_documents({})
             stats["policy_insights_count"] = await self.db.policy_insights.count_documents({})
             stats["policy_recommendations_count"] = await self.db.policy_recommendations.count_documents({})
+            stats["users_count"] = await self.db.users.count_documents({})
+            stats["active_sessions_count"] = await self.db.user_sessions.count_documents({})
             
             recent_scraping = await self.db.scraped_data.find().sort("scraped_at", -1).limit(1).to_list(length=1)
             if recent_scraping:
@@ -218,6 +254,8 @@ class PolicyDatabase:
         """Close database connection"""
         if self.client:
             self.client.close()
+            self._connected = False
+            logger.info("Database connection closed")
 
 # Dependency for FastAPI routes
 _db_instance = None

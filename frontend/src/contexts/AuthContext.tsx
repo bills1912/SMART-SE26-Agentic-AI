@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
@@ -26,75 +26,141 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Prevent duplicate auth checks
+  const isCheckingAuth = useRef(false);
+  const lastAuthCheck = useRef<number>(0);
+  const AUTH_CHECK_INTERVAL = 5000; // Minimum 5 seconds between checks
 
   const isAuthenticated = user !== null;
 
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
+    // Prevent duplicate concurrent calls
+    if (isCheckingAuth.current) {
+      console.log('Auth check already in progress, skipping...');
+      return;
+    }
+    
+    // Prevent too frequent checks (unless user is null)
+    const now = Date.now();
+    if (now - lastAuthCheck.current < AUTH_CHECK_INTERVAL && user !== null) {
+      console.log('Auth check too recent, skipping...');
+      setLoading(false);
+      return;
+    }
+    
+    isCheckingAuth.current = true;
+    lastAuthCheck.current = now;
+
     try {
-      // Skip delay if just authenticated
+      // Check for just_authenticated flag - skip any delay if present
       const justAuth = sessionStorage.getItem('just_authenticated');
-      if (!justAuth) {
-        await new Promise(r => setTimeout(r, 150));
-      } else {
+      if (justAuth) {
         sessionStorage.removeItem('just_authenticated');
+        console.log('Just authenticated, proceeding immediately...');
       }
 
+      console.log('Checking auth status...');
       const response = await api.get('/auth/me');
-      if (response.data.success) {
+      
+      if (response.data.success && response.data.user) {
+        console.log('Auth check successful, user:', response.data.user.email);
         setUser(response.data.user);
+      } else {
+        console.log('Auth check failed: no user in response');
+        setUser(null);
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Only log non-401 errors (401 is expected when not logged in)
+      if (error.response?.status !== 401) {
+        console.error('Auth check error:', error.message);
+      } else {
+        console.log('Not authenticated (401)');
+      }
       setUser(null);
     } finally {
       setLoading(false);
+      isCheckingAuth.current = false;
     }
-  };
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     try {
+      console.log('Attempting login for:', email);
       const response = await api.post('/auth/login', { email, password });
-      if (response.data.success) {
+      
+      if (response.data.success && response.data.user) {
+        console.log('Login successful');
         setUser(response.data.user);
         sessionStorage.setItem('just_authenticated', 'true');
+        lastAuthCheck.current = Date.now();
         navigate('/dashboard');
+      } else {
+        throw new Error('Login failed: Invalid response');
       }
     } catch (error: any) {
-      throw new Error(error.response?.data?.detail || 'Login failed');
+      console.error('Login error:', error);
+      const message = error.response?.data?.detail || error.message || 'Login failed';
+      throw new Error(message);
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
     try {
+      console.log('Attempting registration for:', email);
       const response = await api.post('/auth/register', { email, password, name });
-      if (response.data.success) {
+      
+      if (response.data.success && response.data.user) {
+        console.log('Registration successful');
         setUser(response.data.user);
         sessionStorage.setItem('just_authenticated', 'true');
+        lastAuthCheck.current = Date.now();
         navigate('/dashboard');
+      } else {
+        throw new Error('Registration failed: Invalid response');
       }
     } catch (error: any) {
-      throw new Error(error.response?.data?.detail || 'Registration failed');
+      console.error('Registration error:', error);
+      const message = error.response?.data?.detail || error.message || 'Registration failed';
+      throw new Error(message);
     }
   };
 
   const logout = async () => {
     try {
+      console.log('Logging out...');
       await api.post('/auth/logout');
     } catch (error) {
-      console.error('Logout error:', error);
+      // Ignore logout errors - we're logging out anyway
+      console.debug('Logout request completed');
     } finally {
       setUser(null);
+      lastAuthCheck.current = 0;
       navigate('/login');
     }
   };
 
   useEffect(() => {
-    // Check if coming from OAuth callback
-    if (location.pathname !== '/auth/callback') {
-      checkAuth();
-    } else {
+    // Don't check auth if on callback page
+    if (location.pathname === '/auth/callback') {
+      console.log('On callback page, skipping auth check');
       setLoading(false);
+      return;
     }
-  }, []);
+    
+    // Don't check auth if on login/register pages and no session cookie exists
+    if ((location.pathname === '/login' || location.pathname === '/register')) {
+      // Check if session cookie exists
+      const hasSessionCookie = document.cookie.includes('session_token');
+      if (!hasSessionCookie) {
+        console.log('No session cookie, skipping auth check');
+        setLoading(false);
+        return;
+      }
+    }
+
+    checkAuth();
+  }, [location.pathname]); // Only re-check on pathname change, not on checkAuth change
 
   return (
     <AuthContext.Provider

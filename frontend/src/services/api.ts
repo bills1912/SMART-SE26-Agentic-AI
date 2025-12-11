@@ -1,18 +1,30 @@
-import axios from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { ChatMessage, ChatSession, PolicyAnalysisRequest, PolicyAnalysisResponse } from '../types/chat';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API_BASE = `${BACKEND_URL}/api`;
 
+// Timeout configurations
+const TIMEOUTS = {
+  default: 60000,      // 60 seconds for general requests
+  auth: 45000,         // 45 seconds for auth requests
+  chat: 120000,        // 120 seconds for chat/AI requests (can be slow)
+  health: 10000,       // 10 seconds for health check
+};
+
 class PolicyAPIService {
   private api = axios.create({
     baseURL: API_BASE,
-    timeout: 30000,
+    timeout: TIMEOUTS.default,
     withCredentials: true,  // CRITICAL: Send cookies with requests
     headers: {
       'Content-Type': 'application/json',
     },
   });
+
+  // Retry configuration
+  private maxRetries = 2;
+  private retryDelay = 1000; // 1 second
 
   constructor() {
     // Add request interceptor for logging
@@ -21,10 +33,33 @@ class PolicyAPIService {
       return config;
     });
 
-    // Add response interceptor for error handling
+    // Add response interceptor for error handling and retry
     this.api.interceptors.response.use(
       (response) => response,
-      (error) => {
+      async (error: AxiosError) => {
+        const config = error.config as AxiosRequestConfig & { _retryCount?: number };
+        
+        // Don't retry if no config or already retried max times
+        if (!config || (config._retryCount || 0) >= this.maxRetries) {
+          console.error('API Error:', error.response?.data || error.message);
+          return Promise.reject(error);
+        }
+
+        // Only retry on network errors or 5xx errors
+        const shouldRetry = 
+          !error.response || // Network error
+          (error.response.status >= 500 && error.response.status < 600); // Server error
+
+        if (shouldRetry) {
+          config._retryCount = (config._retryCount || 0) + 1;
+          console.log(`Retrying request (${config._retryCount}/${this.maxRetries})...`);
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, this.retryDelay * config._retryCount!));
+          
+          return this.api(config);
+        }
+
         console.error('API Error:', error.response?.data || error.message);
         return Promise.reject(error);
       }
@@ -46,7 +81,9 @@ class PolicyAPIService {
       ...options
     };
 
-    const response = await this.api.post<PolicyAnalysisResponse>('/chat', request);
+    const response = await this.api.post<PolicyAnalysisResponse>('/chat', request, {
+      timeout: TIMEOUTS.chat // Use longer timeout for chat
+    });
     return response.data;
   }
 
@@ -86,7 +123,9 @@ class PolicyAPIService {
   }
 
   async getHealth() {
-    const response = await this.api.get('/health');
+    const response = await this.api.get('/health', {
+      timeout: TIMEOUTS.health
+    });
     return response.data;
   }
 
@@ -97,7 +136,8 @@ class PolicyAPIService {
   
   async generateReport(sessionId: string, format: 'pdf' | 'docx') {
     const response = await this.api.get(`/report/${sessionId}/${format}`, {
-      responseType: 'blob'
+      responseType: 'blob',
+      timeout: TIMEOUTS.chat // Reports can take time
     });
     return response;
   }
@@ -105,7 +145,9 @@ class PolicyAPIService {
   // Utility method to check if backend is available
   async isBackendAvailable(): Promise<boolean> {
     try {
-      await this.api.get('/');
+      await this.api.get('/', {
+        timeout: TIMEOUTS.health
+      });
       return true;
     } catch (error) {
       return false;
@@ -114,12 +156,14 @@ class PolicyAPIService {
 
   // Generic HTTP methods for authentication and other uses
   async get<T = any>(url: string, config?: any): Promise<{ data: T }> {
-    const response = await this.api.get<T>(url, config);
+    const timeout = url.includes('/auth/') ? TIMEOUTS.auth : TIMEOUTS.default;
+    const response = await this.api.get<T>(url, { timeout, ...config });
     return response;
   }
 
   async post<T = any>(url: string, data?: any, config?: any): Promise<{ data: T }> {
-    const response = await this.api.post<T>(url, data, config);
+    const timeout = url.includes('/auth/') ? TIMEOUTS.auth : TIMEOUTS.default;
+    const response = await this.api.post<T>(url, data, { timeout, ...config });
     return response;
   }
 
