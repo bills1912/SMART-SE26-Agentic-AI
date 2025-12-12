@@ -27,21 +27,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Prevent duplicate auth checks
   const isCheckingAuth = useRef(false);
   const lastAuthCheck = useRef<number>(0);
-  const AUTH_CHECK_INTERVAL = 5000; // Minimum 5 seconds between checks
+  const AUTH_CHECK_INTERVAL = 5000;
 
   const isAuthenticated = user !== null;
 
   const checkAuth = useCallback(async () => {
+    // CRITICAL: Jangan check auth di halaman public
+    const publicPaths = ['/login', '/register', '/auth/callback'];
+    if (publicPaths.includes(location.pathname)) {
+      console.log('Skipping auth check on public page:', location.pathname);
+      setLoading(false);
+      return;
+    }
+
     // Prevent duplicate concurrent calls
     if (isCheckingAuth.current) {
       console.log('Auth check already in progress, skipping...');
       return;
     }
     
-    // Prevent too frequent checks (unless user is null)
+    // Prevent too frequent checks
     const now = Date.now();
     if (now - lastAuthCheck.current < AUTH_CHECK_INTERVAL && user !== null) {
       console.log('Auth check too recent, skipping...');
@@ -53,7 +60,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     lastAuthCheck.current = now;
 
     try {
-      // Check for just_authenticated flag - skip any delay if present
       const justAuth = sessionStorage.getItem('just_authenticated');
       if (justAuth) {
         sessionStorage.removeItem('just_authenticated');
@@ -71,7 +77,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
       }
     } catch (error: any) {
-      // Only log non-401 errors (401 is expected when not logged in)
       if (error.response?.status !== 401) {
         console.error('Auth check error:', error.message);
       } else {
@@ -82,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
       isCheckingAuth.current = false;
     }
-  }, [user]);
+  }, [location.pathname, user]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -131,7 +136,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Logging out...');
       await api.post('/auth/logout');
     } catch (error) {
-      // Ignore logout errors - we're logging out anyway
       console.debug('Logout request completed');
     } finally {
       setUser(null);
@@ -141,26 +145,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Don't check auth if on callback page
-    if (location.pathname === '/auth/callback') {
-      console.log('On callback page, skipping auth check');
+    // CRITICAL: Only check auth on protected routes
+    const publicPaths = ['/login', '/register', '/auth/callback'];
+    
+    if (publicPaths.includes(location.pathname)) {
+      console.log('Public page, skipping auth check');
       setLoading(false);
       return;
     }
-    
-    // Don't check auth if on login/register pages and no session cookie exists
-    if ((location.pathname === '/login' || location.pathname === '/register')) {
-      // Check if session cookie exists
-      const hasSessionCookie = document.cookie.includes('session_token');
-      if (!hasSessionCookie) {
-        console.log('No session cookie, skipping auth check');
-        setLoading(false);
-        return;
-      }
-    }
 
     checkAuth();
-  }, [location.pathname]); // Only re-check on pathname change, not on checkAuth change
+  }, [location.pathname, checkAuth]);
 
   return (
     <AuthContext.Provider

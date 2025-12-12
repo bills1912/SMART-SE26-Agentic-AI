@@ -21,9 +21,12 @@ function AppRouter() {
 
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
+      
+      {/* Protected routes */}
       <Route
         path="/dashboard"
         element={
@@ -32,14 +35,14 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
+      
+      {/* Root redirect */}
       <Route 
         path="/" 
-        element={
-          <ProtectedRoute>
-            <Navigate to="/dashboard" replace />
-          </ProtectedRoute>
-        } 
+        element={<Navigate to="/dashboard" replace />}
       />
+      
+      {/* Catch-all redirect to login */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
