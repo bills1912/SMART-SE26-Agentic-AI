@@ -383,7 +383,11 @@ async def not_found_handler(request: Request, exc):
         )
     
     # For non-API paths, let them through (frontend will handle)
-    logger.info(f"Non-API path requested: {path} (frontend should handle)")
+    logger.info(f"Serving SPA for 404 path: {path}")
+    index_path = FRONTEND_BUILD_PATH / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    
     return JSONResponse(
         status_code=404,
         content={"detail": "Not found"}
@@ -416,30 +420,47 @@ if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists(
         )
         logger.info("✓ Static files mounted at /static")
     
+    @app.get("/favicon.ico")
+    async def favicon():
+        favicon_path = FRONTEND_BUILD_PATH / "favicon.ico"
+        if favicon_path.exists():
+            return FileResponse(favicon_path)
+        raise HTTPException(status_code=404)
+
+    @app.get("/manifest.json")
+    async def manifest():
+        manifest_path = FRONTEND_BUILD_PATH / "manifest.json"
+        if manifest_path.exists():
+            return FileResponse(manifest_path)
+        raise HTTPException(status_code=404)
+
+    @app.get("/robots.txt")
+    async def robots():
+        robots_path = FRONTEND_BUILD_PATH / "robots.txt"
+        if robots_path.exists():
+            return FileResponse(robots_path)
+        raise HTTPException(status_code=404)
+    
     # SPA Fallback - Serve index.html untuk semua non-API routes
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):
         """
         Catch-all route untuk serve React SPA.
-        Semua client-side routes (/login, /dashboard, dll) akan serve index.html
+        Semua client-side routes akan serve index.html
         """
-        # Skip if it's an API route (already handled above)
+        # Skip if it's an API route (already handled by routers)
         if full_path.startswith("api/"):
+            logger.warning(f"API endpoint not found: /{full_path}")
             raise HTTPException(status_code=404, detail="API endpoint not found")
         
-        # Serve specific files if they exist (favicon, manifest, robots.txt, etc)
-        if full_path and not full_path.startswith("_"):
-            file_path = FRONTEND_BUILD_PATH / full_path
-            if file_path.is_file():
-                return FileResponse(file_path)
-        
-        # Fallback ke index.html untuk semua SPA routes
+        # Serve index.html untuk semua SPA routes
         index_path = FRONTEND_BUILD_PATH / "index.html"
         if index_path.exists():
             logger.info(f"Serving SPA for route: /{full_path}")
             return FileResponse(index_path)
         
-        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+        logger.error("Frontend index.html not found")
+        raise HTTPException(status_code=404, detail="Frontend not found")
     
     logger.info("✓ SPA fallback routing configured")
 else:
