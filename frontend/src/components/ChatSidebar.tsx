@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
-import { 
-  Plus, 
-  MessageSquare, 
-  Download, 
-  History, 
+import React, { useState } from "react";
+import {
+  Plus,
+  MessageSquare,
+  Download,
+  History,
   Calendar,
   FileText,
   ChevronLeft,
   Trash2,
-  MoreHorizontal
-} from 'lucide-react';
-import { useChat } from '../contexts/ChatContext';
-import { format } from 'date-fns';
-import BrandLogo from './BrandLogo';
+  MoreHorizontal,
+} from "lucide-react";
+import { useChat } from "../contexts/ChatContext";
+import { format } from "date-fns";
+import BrandLogo from "./BrandLogo";
 
 interface ChatSidebarProps {
   isOpen: boolean;
@@ -20,37 +20,58 @@ interface ChatSidebarProps {
 }
 
 const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
-  const { 
-    currentSession, 
-    sessions, 
-    isLoading, 
-    createNewChat, 
-    switchToSession, 
-    exportCurrentChat, 
-    exportAllChats 
+  const {
+    currentSession,
+    sessions,
+    isLoading,
+    createNewChat,
+    switchToSession,
+    exportCurrentChat,
+    exportAllChats,
   } = useChat();
 
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), 'MMM dd, HH:mm');
+      return format(new Date(dateString), "MMM dd, HH:mm");
     } catch {
-      return 'Unknown date';
+      return "Unknown date";
     }
   };
 
   const getMessageCount = (session: any) => {
-    return session.messages?.length || 0;
+    // Prioritas 1: Gunakan message_count dari backend jika ada
+    if (typeof session.message_count === "number") {
+      return session.message_count;
+    }
+
+    // Prioritas 2: Hitung dari array messages
+    if (!session.messages) return 0;
+    if (Array.isArray(session.messages)) {
+      return session.messages.filter(
+        (msg: any) => !msg.id?.startsWith("welcome_")
+      ).length;
+    }
+
+    return 0;
+  };
+
+  // Hitung total messages across all sessions
+  const getTotalMessages = () => {
+    return sessions.reduce((total, session) => {
+      return total + getMessageCount(session);
+    }, 0);
   };
 
   return (
     <>
       {/* Sidebar - Overlay on mobile, fixed on desktop */}
-      <div className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-orange-200 dark:border-gray-700 shadow-lg transform transition-transform duration-300 flex flex-col w-80 ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      } z-50`}>
-        
+      <div
+        className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-orange-200 dark:border-gray-700 shadow-lg transform transition-transform duration-300 flex flex-col w-80 ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        } z-50`}
+      >
         {/* Header - Fixed height section */}
         <div className="flex-shrink-0 p-4 border-b border-orange-200 dark:border-gray-700">
           {/* Brand Section */}
@@ -64,11 +85,13 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
               <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>
           </div>
-          
+
           {/* Chat History Title */}
           <div className="flex items-center gap-2 mb-4">
             <History className="h-4 w-4 text-orange-600" />
-            <h2 className="text-base font-medium text-gray-800 dark:text-white">Chat History</h2>
+            <h2 className="text-base font-medium text-gray-800 dark:text-white">
+              Chat History
+            </h2>
           </div>
 
           {/* Action Buttons */}
@@ -133,34 +156,35 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  onClick={() => switchToSession(session.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
-                    currentSession?.id === session.id
-                      ? 'bg-orange-50 dark:bg-gray-700 border-orange-200 dark:border-gray-600'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-transparent'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-800 dark:text-gray-100 truncate">
-                        {session.title || 'Untitled Chat'}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-300">
-                        <Calendar className="h-3 w-3" />
-                        <span>{formatDate(session.created_at)}</span>
-                        <span>•</span>
-                        <span>{getMessageCount(session)} messages</span>
+              {sessions.map((session) => {
+                const messageCount = getMessageCount(session);
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => switchToSession(session.id)}
+                    className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
+                      currentSession?.id === session.id
+                        ? "bg-orange-50 dark:bg-gray-700 border-orange-200 dark:border-gray-600"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-700 border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-800 dark:text-gray-100 truncate">
+                          {session.title || "Untitled Chat"}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-300">
+                          <Calendar className="h-3 w-3" />
+                          <span>{formatDate(session.created_at)}</span>
+                        </div>
                       </div>
+                      {currentSession?.id === session.id && (
+                        <div className="w-2 h-2 bg-orange-600 rounded-full flex-shrink-0 ml-2 mt-2"></div>
+                      )}
                     </div>
-                    {currentSession?.id === session.id && (
-                      <div className="w-2 h-2 bg-orange-600 rounded-full flex-shrink-0 ml-2 mt-2"></div>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -173,14 +197,18 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onToggle }) => {
               <span className="font-medium">{sessions.length}</span>
             </div>
             <div className="flex justify-between">
+              <span>Total Messages:</span>
+              <span className="font-medium">{getTotalMessages()}</span>
+            </div>
+            <div className="flex justify-between">
               <span>Current Session:</span>
-              <span className="font-medium">{currentSession ? getMessageCount(currentSession) : 0} messages</span>
+              <span className="font-medium">
+                {currentSession ? getMessageCount(currentSession) : 0} messages
+              </span>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Note: Toggle button now handled by separate SidebarToggle component */}
 
       {/* Overlay (when sidebar is open) */}
       {isOpen && (
