@@ -528,13 +528,14 @@ const ChatInterface: React.FC = () => {
       {/* Report Modal */}
       {showReportModal && sessionId && (
         <ReportModal
+          isOpen={showReportModal}
           sessionId={sessionId}
           onClose={() => {
             setShowReportModal(false);
             setReportMessageId(null);
           }}
           // Pass the specific message's data to report modal
-          messageData={reportMessageId ? messages.find(m => m.id === reportMessageId) : undefined}
+          message={messages.find(m => m.id === reportMessageId) as any}
         />
       )}
     </div>

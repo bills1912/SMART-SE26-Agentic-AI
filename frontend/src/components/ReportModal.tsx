@@ -1,28 +1,33 @@
 import React, { useState } from 'react';
 import { X, FileText, FileSpreadsheet, Globe, Download, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '../services/api';
+import { ChatMessage } from '../types/chat';
 
 type ReportFormat = 'pdf' | 'docx' | 'html';
 
-interface MessageData {
-  id: string;
-  visualizations?: any[];
-  insights?: string[];
-  policies?: any[];
-}
-
 interface ReportModalProps {
-  sessionId: string;
+  isOpen: boolean;
   onClose: () => void;
-  messageData?: MessageData;
+  message: ChatMessage;
+  sessionId: string;
 }
 
-const ReportModal: React.FC<ReportModalProps> = ({ sessionId, onClose, messageData }) => {
+const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, message, sessionId }) => {
   const [downloading, setDownloading] = useState<ReportFormat | null>(null);
   const [success, setSuccess] = useState<ReportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Don't render if not open
+  if (!isOpen) return null;
+
+  // const sessionId = message.session_id;
+
   const handleDownload = async (format: ReportFormat) => {
+    if (!sessionId) {
+      setError('Session ID tidak ditemukan');
+      return;
+    }
+
     setDownloading(format);
     setError(null);
     setSuccess(null);
@@ -67,10 +72,10 @@ const ReportModal: React.FC<ReportModalProps> = ({ sessionId, onClose, messageDa
     }
   };
 
-  // Count data from messageData if available
-  const vizCount = messageData?.visualizations?.length || 0;
-  const insightCount = messageData?.insights?.length || 0;
-  const policyCount = messageData?.policies?.length || 0;
+  // Count data from message - ONLY from THIS specific message
+  const vizCount = message.visualizations?.length || 0;
+  const insightCount = message.insights?.length || 0;
+  const policyCount = message.policies?.length || 0;
   const hasData = vizCount > 0 || insightCount > 0 || policyCount > 0;
 
   return (
@@ -92,10 +97,10 @@ const ReportModal: React.FC<ReportModalProps> = ({ sessionId, onClose, messageDa
 
         {/* Content */}
         <div className="p-5 space-y-4">
-          {/* Summary Stats */}
+          {/* Summary Stats - Only from THIS message */}
           {hasData && (
             <div className="bg-gray-700/50 rounded-xl p-4">
-              <h3 className="text-sm font-medium text-gray-300 mb-3">Konten Laporan:</h3>
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Konten dari Response Ini:</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="bg-gray-700 rounded-lg p-3">
                   <div className="text-2xl font-bold text-blue-400">{vizCount}</div>
@@ -110,6 +115,14 @@ const ReportModal: React.FC<ReportModalProps> = ({ sessionId, onClose, messageDa
                   <div className="text-xs text-gray-400">Kebijakan</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {!hasData && (
+            <div className="bg-gray-700/50 rounded-xl p-4 text-center">
+              <p className="text-gray-400 text-sm">
+                Response ini tidak memiliki visualisasi, insight, atau rekomendasi kebijakan.
+              </p>
             </div>
           )}
 
