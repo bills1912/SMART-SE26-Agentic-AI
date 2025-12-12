@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Request
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -320,31 +320,95 @@ async def get_stats():
 
 @api_router.get("/report/{session_id}/{format}")
 async def generate_report(session_id: str, format: str):
+    """
+    Generate comprehensive report with visualizations and policies
+    
+    Supported formats:
+    - pdf: PDF document with tables and formatted content
+    - docx: Word document with full formatting
+    - html: Interactive HTML with embedded charts (can be printed to PDF)
+    """
     try:
-        if format not in ['pdf', 'docx']:
-            raise HTTPException(status_code=400, detail="Format must be 'pdf' or 'docx'")
+        # Validate format
+        if format not in ['pdf', 'docx', 'html']:
+            raise HTTPException(
+                status_code=400, 
+                detail="Format must be 'pdf', 'docx', or 'html'"
+            )
         
+        # Get session with all messages
         session = await policy_db.get_chat_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
+        logger.info(f"Generating {format} report for session {session_id}")
+        
         if format == 'pdf':
             buffer = report_generator.generate_pdf(session)
             media_type = 'application/pdf'
-            filename = f"Laporan_Sensus_{session_id[:8]}.pdf"
-        else:
+            filename = f"Laporan_Sensus_Ekonomi_{session_id[:8]}.pdf"
+            
+            return StreamingResponse(
+                buffer,
+                media_type=media_type,
+                headers={
+                    'Content-Disposition': f'attachment; filename="{filename}"',
+                    'Access-Control-Expose-Headers': 'Content-Disposition'
+                }
+            )
+        
+        elif format == 'docx':
             buffer = report_generator.generate_docx(session)
             media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            filename = f"Laporan_Sensus_{session_id[:8]}.docx"
+            filename = f"Laporan_Sensus_Ekonomi_{session_id[:8]}.docx"
+            
+            return StreamingResponse(
+                buffer,
+                media_type=media_type,
+                headers={
+                    'Content-Disposition': f'attachment; filename="{filename}"',
+                    'Access-Control-Expose-Headers': 'Content-Disposition'
+                }
+            )
         
-        return StreamingResponse(
-            buffer,
-            media_type=media_type,
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
-        )
+        else:  # html
+            html_content = report_generator.generate_html_report(session)
+            
+            # Return as downloadable HTML file
+            return HTMLResponse(
+                content=html_content,
+                headers={
+                    'Content-Disposition': f'attachment; filename="Laporan_Sensus_Ekonomi_{session_id[:8]}.html"',
+                    'Access-Control-Expose-Headers': 'Content-Disposition'
+                }
+            )
+    
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generating report: {e}")
+        logger.error(f"Error generating report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+    
+@api_router.get("/report/{session_id}/preview")
+async def preview_report(session_id: str):
+    """
+    Preview report as HTML in browser (tidak download, langsung tampil)
+    """
+    try:
+        session = await policy_db.get_chat_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        html_content = report_generator.generate_html_report(session)
+        
+        # Return as viewable HTML (tanpa Content-Disposition attachment)
+        return HTMLResponse(content=html_content)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error previewing report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error previewing report: {str(e)}")
 
 # --- 9. REGISTER API ROUTER ---
 app.include_router(api_router)
