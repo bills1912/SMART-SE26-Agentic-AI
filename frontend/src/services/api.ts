@@ -14,6 +14,7 @@ const TIMEOUTS = {
   auth: 45000,         // 45 seconds for auth requests
   chat: 120000,        // 120 seconds for chat/AI requests (can be slow)
   health: 10000,       // 10 seconds for health check
+  report: 180000,      // 180 seconds for report generation (PDF/DOCX can be slow)
 };
 
 class PolicyAPIService {
@@ -141,12 +142,30 @@ class PolicyAPIService {
     return response.data;
   }
   
-  async generateReport(sessionId: string, format: 'pdf' | 'docx') {
+  /**
+   * Generate and download report in specified format
+   * @param sessionId - The chat session ID
+   * @param format - Report format: 'pdf', 'docx', or 'html'
+   * @returns Blob response for download
+   */
+  async generateReport(sessionId: string, format: 'pdf' | 'docx' | 'html') {
     const response = await this.api.get(`/report/${sessionId}/${format}`, {
       responseType: 'blob',
-      timeout: TIMEOUTS.chat // Reports can take time
+      timeout: TIMEOUTS.report // Reports can take time to generate
     });
     return response;
+  }
+
+  /**
+   * Preview report as HTML in browser (without download)
+   * @param sessionId - The chat session ID
+   * @returns HTML content as string
+   */
+  async previewReport(sessionId: string): Promise<string> {
+    const response = await this.api.get(`/report/${sessionId}/preview`, {
+      timeout: TIMEOUTS.report
+    });
+    return response.data;
   }
 
   // Utility method to check if backend is available

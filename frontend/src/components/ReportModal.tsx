@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Loader2, FileText } from 'lucide-react';
+import { X, Download, Loader2, FileText, Globe } from 'lucide-react';
 import apiService from '../services/api';
 
 interface ReportModalProps {
@@ -14,11 +14,11 @@ const ReportModal: React.FC<ReportModalProps> = ({
   message
 }) => {
   const [downloading, setDownloading] = useState(false);
-  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'docx' | null>(null);
+  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'docx' | 'html' | null>(null);
 
   if (!isOpen) return null;
 
-  const handleDownload = async (format: 'pdf' | 'docx') => {
+  const handleDownload = async (format: 'pdf' | 'docx' | 'html') => {
     try {
       setDownloading(true);
       setDownloadingFormat(format);
@@ -26,10 +26,18 @@ const ReportModal: React.FC<ReportModalProps> = ({
       // Call API to generate report
       const response = await apiService.generateReport(message.session_id, format);
       
+      // Determine MIME type
+      let mimeType = 'application/octet-stream';
+      if (format === 'pdf') {
+        mimeType = 'application/pdf';
+      } else if (format === 'docx') {
+        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else if (format === 'html') {
+        mimeType = 'text/html';
+      }
+      
       // Create download link
-      const blob = new Blob([response.data], { 
-        type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
-      });
+      const blob = new Blob([response.data], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -47,6 +55,11 @@ const ReportModal: React.FC<ReportModalProps> = ({
       setDownloadingFormat(null);
     }
   };
+
+  // Count items safely
+  const vizCount = Array.isArray(message.visualizations) ? message.visualizations.length : 0;
+  const insightCount = Array.isArray(message.insights) ? message.insights.length : 0;
+  const policyCount = Array.isArray(message.policies) ? message.policies.length : 0;
 
   return (
     <>
@@ -78,8 +91,9 @@ const ReportModal: React.FC<ReportModalProps> = ({
               </div>
             </div>
             
-            {/* Download Buttons - Small in corner */}
+            {/* Download Buttons */}
             <div className="flex items-center gap-2">
+              {/* PDF Button */}
               <button
                 onClick={() => handleDownload('pdf')}
                 disabled={downloading}
@@ -94,6 +108,7 @@ const ReportModal: React.FC<ReportModalProps> = ({
                 <span>PDF</span>
               </button>
               
+              {/* Word Button */}
               <button
                 onClick={() => handleDownload('docx')}
                 disabled={downloading}
@@ -108,9 +123,24 @@ const ReportModal: React.FC<ReportModalProps> = ({
                 <span>Word</span>
               </button>
               
+              {/* HTML Button */}
+              <button
+                onClick={() => handleDownload('html')}
+                disabled={downloading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+                title="Download HTML (dengan chart interaktif)"
+              >
+                {downloading && downloadingFormat === 'html' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Globe className="h-4 w-4" />
+                )}
+                <span>HTML</span>
+              </button>
+              
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors ml-2"
                 aria-label="Close modal"
               >
                 <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
@@ -136,6 +166,22 @@ const ReportModal: React.FC<ReportModalProps> = ({
                 </p>
               </div>
 
+              {/* Summary Stats */}
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{vizCount}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Visualisasi</div>
+                </div>
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{insightCount}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Insights</div>
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{policyCount}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Rekomendasi</div>
+                </div>
+              </div>
+
               {/* Main Content */}
               <div className="space-y-6">
                 <div className="prose dark:prose-invert max-w-none">
@@ -149,11 +195,36 @@ const ReportModal: React.FC<ReportModalProps> = ({
                   </div>
                 </div>
 
-                {/* Insights Section */}
-                {message.insights && message.insights.length > 0 && (
+                {/* Visualizations Info */}
+                {vizCount > 0 && (
                   <div>
                     <h2 className="text-xl font-semibold text-orange-600 dark:text-orange-400 mb-3">
-                      Key Insights
+                      📊 Data Visualisasi
+                    </h2>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                        Laporan ini mencakup {vizCount} visualisasi data. Untuk melihat grafik interaktif, 
+                        <strong> unduh versi HTML</strong>.
+                      </p>
+                      <div className="space-y-2">
+                        {message.visualizations.map((viz: any, index: number) => (
+                          <div key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                              {index + 1}
+                            </span>
+                            <span>{viz.title || `Visualisasi ${index + 1}`}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Insights Section */}
+                {insightCount > 0 && (
+                  <div>
+                    <h2 className="text-xl font-semibold text-orange-600 dark:text-orange-400 mb-3">
+                      💡 Key Insights
                     </h2>
                     <div className="space-y-2">
                       {message.insights.map((insight: string, index: number) => (
@@ -174,27 +245,27 @@ const ReportModal: React.FC<ReportModalProps> = ({
                 )}
 
                 {/* Policy Recommendations */}
-                {message.policies && message.policies.length > 0 && (
+                {policyCount > 0 && (
                   <div>
                     <h2 className="text-xl font-semibold text-orange-600 dark:text-orange-400 mb-3">
-                      Rekomendasi Kebijakan
+                      🎯 Rekomendasi Kebijakan
                     </h2>
                     <div className="space-y-4">
-                      {message.policies.map((policy: any) => (
+                      {message.policies.map((policy: any, index: number) => (
                         <div 
-                          key={policy.id}
+                          key={policy.id || index}
                           className="border-l-4 border-orange-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg p-4"
                         >
                           <div className="flex items-start gap-2 mb-2">
                             <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                              policy.priority === 'high' ? 'bg-red-100 text-red-800' :
-                              policy.priority === 'medium' ? 'bg-orange-100 text-orange-800' :
-                              'bg-green-100 text-green-800'
+                              policy.priority === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                              policy.priority === 'medium' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
+                              'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                             }`}>
-                              {policy.priority.toUpperCase()}
+                              {policy.priority?.toUpperCase() || 'MEDIUM'}
                             </span>
                             <span className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">
-                              {policy.category}
+                              {policy.category || 'Kebijakan'}
                             </span>
                           </div>
                           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
@@ -203,34 +274,41 @@ const ReportModal: React.FC<ReportModalProps> = ({
                           <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                             {policy.description}
                           </p>
-                          <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-3">
-                            <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">
-                              Expected Impact:
-                            </p>
-                            <p className="text-sm text-orange-700 dark:text-orange-200">
-                              {policy.impact}
-                            </p>
-                          </div>
+                          {policy.impact && (
+                            <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-3">
+                              <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                                Expected Impact:
+                              </p>
+                              <p className="text-sm text-orange-700 dark:text-orange-200">
+                                {policy.impact}
+                              </p>
+                            </div>
+                          )}
+                          {policy.implementation_steps && policy.implementation_steps.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                Langkah Implementasi:
+                              </p>
+                              <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                                {policy.implementation_steps.map((step: string, stepIndex: number) => (
+                                  <li key={stepIndex}>{step}</li>
+                                ))}
+                              </ol>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* Visualizations Info */}
-                {message.visualizations && message.visualizations.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-semibold text-orange-600 dark:text-orange-400 mb-3">
-                      Data Visualizations
-                    </h2>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        📊 Laporan ini mencakup {message.visualizations.length} visualisasi data.
-                        Grafik dan chart dapat dilihat pada tampilan interactive di aplikasi.
-                      </p>
-                    </div>
-                  </div>
-                )}
+              {/* Download Reminder */}
+              <div className="mt-8 p-4 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
+                <p className="text-sm text-gray-700 dark:text-gray-300 text-center">
+                  💡 <strong>Tips:</strong> Unduh versi <strong>HTML</strong> untuk mendapatkan laporan dengan grafik interaktif yang dapat di-zoom dan di-hover.
+                  Versi <strong>PDF</strong> dan <strong>Word</strong> menyertakan tabel data dari setiap visualisasi.
+                </p>
               </div>
 
               {/* Footer */}
