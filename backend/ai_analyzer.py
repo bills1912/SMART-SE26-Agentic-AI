@@ -3,16 +3,25 @@ import logging
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import google.generativeai as genai
-from data_agent import DataRetrievalAgent, AnalysisAgent
+from data_agent import DataRetrievalAgent, AnalysisAgent, KBLI_SHORT_NAMES
 from visualization_agent import VisualizationAgent
 from insight_agent import InsightGenerationAgent
 from models import QueryIntent
 import json
+from pathlib import Path
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
+# --- 1. KONFIGURASI ENV (FIXED) ---
+# Mengambil path folder backend saat ini
+BACKEND_DIR = Path(__file__).resolve().parent
+# Naik satu level ke root, lalu masuk ke frontend/.env
+ENV_PATH = BACKEND_DIR.parent / 'frontend' / '.env'
+load_dotenv(ENV_PATH)
+
 class PolicyAIAnalyzer:
-    """Enhanced Policy Analyzer with better intent detection"""
+    """Enhanced Policy Analyzer with better intent detection and multi-visualization support"""
     
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
@@ -47,11 +56,11 @@ class PolicyAIAnalyzer:
             'berapa', 'jumlah', 'total', 'banyak', 'many', 'how much', 'how many',
             
             # Pertanyaan perbandingan
-            'bandingkan', 'compare', 'versus', 'vs', 'perbandingan', 'lebih besar', 'lebih kecil',
+            'bandingkan', 'compare', 'versus', 'vs', 'perbandingan', 'lebih besar', 'lebih kecil', 'dibanding',
             
             # Pertanyaan ranking
             'terbanyak', 'tertinggi', 'terendah', 'terbesar', 'terkecil', 'top', 'ranking', 
-            'urutan', 'urut', 'paling', 'most', 'least', 'highest', 'lowest',
+            'urutan', 'urut', 'paling', 'most', 'least', 'highest', 'lowest', 'tersedikit',
             
             # Pertanyaan distribusi
             'distribusi', 'sebaran', 'persebaran', 'komposisi', 'proporsi', 'persentase',
@@ -62,8 +71,8 @@ class PolicyAIAnalyzer:
             'which sector', 'what sector', 'where',
             
             # Kata kunci analisis
-            'analisis', 'analyze', 'tren', 'trend', 'perkembangan', 'data', 'statistik',
-            'insight', 'laporan', 'report'
+            'analisis', 'analyze', 'analisa', 'tren', 'trend', 'perkembangan', 'data', 'statistik',
+            'insight', 'laporan', 'report', 'overview', 'gambaran', 'detail', 'lengkap'
         ]
         
         # Check if query contains any data keywords
@@ -72,7 +81,8 @@ class PolicyAIAnalyzer:
         # Exclude conversational queries
         conversational_only = [
             'halo', 'hello', 'hi', 'hai', 'terima kasih', 'thank you', 'thanks',
-            'siapa kamu', 'who are you', 'apa itu', 'what is', 'tolong jelaskan'
+            'siapa kamu', 'who are you', 'apa itu', 'what is', 'tolong jelaskan',
+            'selamat pagi', 'selamat siang', 'selamat malam'
         ]
         
         is_conversational = any(keyword in query_lower for keyword in conversational_only)
@@ -81,18 +91,19 @@ class PolicyAIAnalyzer:
         has_province = any(prov in query_lower for prov in [
             'aceh', 'sumut', 'sumbar', 'riau', 'jambi', 'sumsel', 'bengkulu', 'lampung',
             'jakarta', 'jabar', 'jateng', 'jatim', 'yogya', 'banten', 'bali',
-            'kalimantan', 'sulawesi', 'papua', 'maluku', 'nusa tenggara'
+            'kalimantan', 'sulawesi', 'papua', 'maluku', 'nusa tenggara',
+            'sumatera', 'jawa', 'gorontalo'
         ])
         
         has_sector = any(sector in query_lower for sector in [
             'pertanian', 'pertambangan', 'industri', 'listrik', 'konstruksi',
             'perdagangan', 'transportasi', 'hotel', 'restoran', 'akomodasi',
             'informasi', 'keuangan', 'real estat', 'properti', 'pendidikan',
-            'kesehatan', 'sektor', 'lapangan usaha', 'kbli'
+            'kesehatan', 'sektor', 'lapangan usaha', 'kbli', 'usaha', 'bisnis'
         ])
         
         # Decision logic
-        if is_conversational and not (has_province or has_sector):
+        if is_conversational and not (has_province or has_sector or has_data_keyword):
             return False
         
         if has_data_keyword or has_province or has_sector:
@@ -107,7 +118,7 @@ class PolicyAIAnalyzer:
         scraped_data: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Main analysis method with enhanced intent detection
+        Main analysis method with enhanced intent detection and MULTIPLE visualizations
         """
         try:
             logger.info(f"Analyzing query: {query}")
@@ -121,7 +132,7 @@ class PolicyAIAnalyzer:
                 # Handle conversational queries
                 return await self._handle_conversational_query(query, language)
             
-            # ENHANCED: Try to process as data query
+            # ENHANCED: Process as data query with multiple visualizations
             try:
                 # Step 1: Understand intent
                 intent = await self.data_agent.understand_query(query)
@@ -136,25 +147,25 @@ class PolicyAIAnalyzer:
                     # FALLBACK 1: Try without province filter
                     if intent.provinces:
                         logger.info("Fallback: Removing province filter")
-                        intent.provinces = []
-                        raw_data = await self.data_agent.get_data_by_intent(intent)
+                        fallback_intent = QueryIntent(
+                            intent_type=intent.intent_type,
+                            provinces=[],
+                            sectors=intent.sectors
+                        )
+                        raw_data = await self.data_agent.get_data_by_intent(fallback_intent)
+                        if raw_data:
+                            intent = fallback_intent
                     
-                    # FALLBACK 2: Try without sector filter
-                    if not raw_data and intent.sectors:
-                        logger.info("Fallback: Removing sector filter")
-                        intent.sectors = []
-                        raw_data = await self.data_agent.get_data_by_intent(intent)
-                    
+                    # FALLBACK 2: Try overview if still no data
                     if not raw_data:
-                        # Last resort: Get all data
-                        logger.info("Fallback: Fetching all data")
-                        intent = QueryIntent(intent_type='distribution')
+                        logger.info("Fallback: Switching to overview")
+                        intent = QueryIntent(intent_type='overview')
                         raw_data = await self.data_agent.get_data_by_intent(intent)
                 
                 if not raw_data:
                     logger.error("No data found even after fallbacks")
                     return {
-                        'message': 'Maaf, tidak ada data yang ditemukan untuk pertanyaan Anda. Silakan coba pertanyaan lain atau hubungi administrator.',
+                        'message': 'Maaf, tidak ada data yang ditemukan untuk pertanyaan Anda. Data Sensus Ekonomi mungkin tidak tersedia untuk kriteria yang Anda minta.',
                         'visualizations': [],
                         'insights': [],
                         'policies': [],
@@ -169,9 +180,9 @@ class PolicyAIAnalyzer:
                 
                 # Step 4: Analyze
                 analysis = self.analysis_agent.analyze(aggregated, intent)
-                logger.info("Analysis completed")
+                logger.info(f"Analysis completed, total_usaha={analysis.get('total_usaha', 0)}")
                 
-                # Step 5: Create visualizations
+                # Step 5: Create MULTIPLE visualizations
                 visualizations = self.viz_agent.create_visualizations(analysis, aggregated)
                 logger.info(f"Created {len(visualizations)} visualizations")
                 
@@ -287,9 +298,9 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
                 {
                     'provinsi': prov['provinsi'],
                     'total_usaha': prov['total'],
-                    'persentase': round(prov['percentage'], 2)
+                    'persentase': round(prov.get('percentage', 0), 2)
                 }
-                for prov in analysis['top_provinces']
+                for prov in analysis['top_provinces'][:5]
             ]
         
         if 'max_province' in analysis and analysis['max_province']:
@@ -304,12 +315,23 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
                 'total': analysis['min_province'].get('total')
             }
         
+        if 'top_sectors' in analysis:
+            simplified['hasil_analisis']['sektor_teratas'] = [
+                {
+                    'kode': s.get('code', ''),
+                    'nama': s.get('short_name', s.get('name', '')),
+                    'total': s['total'],
+                    'persentase': round(s.get('percentage', 0), 2)
+                }
+                for s in analysis['top_sectors'][:5]
+            ]
+        
         if 'distribution_detail' in analysis:
             # Top 5 sectors only
             simplified['hasil_analisis']['distribusi_sektor'] = [
                 {
                     'kode': detail['sector_code'],
-                    'nama': detail['sector_name'],
+                    'nama': detail.get('short_name', detail['sector_name']),
                     'total': detail['total'],
                     'persentase': round(detail['percentage'], 2)
                 }
@@ -333,6 +355,26 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
         if 'concentration' in analysis:
             simplified['hasil_analisis']['konsentrasi_top3'] = round(analysis['concentration'], 2)
         
+        if 'province_concentration_top3' in analysis:
+            simplified['hasil_analisis']['konsentrasi_provinsi_top3'] = round(analysis['province_concentration_top3'], 2)
+        
+        if 'sector_concentration_top3' in analysis:
+            simplified['hasil_analisis']['konsentrasi_sektor_top3'] = round(analysis['sector_concentration_top3'], 2)
+        
+        # Province detail
+        if 'provinsi' in analysis:
+            simplified['hasil_analisis']['provinsi'] = analysis['provinsi']
+        
+        if 'all_sectors' in analysis and context.get('data_type') == 'province_detail':
+            simplified['hasil_analisis']['sektor_di_provinsi'] = [
+                {
+                    'nama': s.get('short_name', s.get('name', '')),
+                    'total': s['total'],
+                    'persentase': round(s.get('percentage', 0), 2)
+                }
+                for s in analysis['all_sectors'][:5]
+            ]
+        
         return json.dumps(simplified, indent=2, ensure_ascii=False)
     
     def _generate_fallback_response(self, analysis: Dict[str, Any], aggregated: Dict[str, Any]) -> str:
@@ -341,7 +383,25 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
         data_type = aggregated.get('type', 'unknown')
         
         try:
-            if data_type == 'ranking':
+            if data_type == 'overview':
+                total_usaha = analysis.get('total_usaha', 0)
+                total_provinces = analysis.get('total_provinces', 0)
+                top_provinces = analysis.get('top_provinces', [])
+                top_sectors = analysis.get('top_sectors', [])
+                
+                response = f"Berdasarkan data Sensus Ekonomi 2016, tercatat total {total_usaha:,} unit usaha di {total_provinces} provinsi Indonesia. "
+                
+                if top_provinces:
+                    top = top_provinces[0]
+                    response += f"{top['provinsi']} memiliki jumlah usaha terbanyak dengan {top['total']:,} unit usaha ({top.get('percentage', 0):.1f}% dari total nasional). "
+                
+                if top_sectors:
+                    top_sector = top_sectors[0]
+                    response += f"Sektor {top_sector.get('short_name', top_sector.get('name', ''))} mendominasi dengan {top_sector['total']:,} usaha."
+                
+                return response
+            
+            elif data_type == 'ranking':
                 top_provinces = analysis.get('top_provinces', [])
                 if top_provinces:
                     top = top_provinces[0]
@@ -349,7 +409,7 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
                     
                     response = f"Berdasarkan data Sensus Ekonomi 2016, {top['provinsi']} memiliki jumlah usaha terbanyak dengan total {top['total']:,} unit usaha"
                     
-                    if top['percentage'] > 0:
+                    if top.get('percentage', 0) > 0:
                         response += f" ({top['percentage']:.1f}% dari total nasional)"
                     
                     response += ". "
@@ -368,11 +428,11 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
                     top_sector = dist_detail[0]
                     total_usaha = analysis.get('total_usaha', 0)
                     
-                    response = f"Analisis distribusi menunjukkan bahwa sektor {top_sector['sector_name']} mendominasi dengan total {top_sector['total']:,} unit usaha ({top_sector['percentage']:.1f}% dari total). "
+                    response = f"Analisis distribusi menunjukkan bahwa sektor {top_sector.get('short_name', top_sector['sector_name'])} mendominasi dengan total {top_sector['total']:,} unit usaha ({top_sector['percentage']:.1f}% dari total). "
                     
                     # Add top 3 sectors
                     if len(dist_detail) >= 3:
-                        top3_sectors = ', '.join([s['sector_name'] for s in dist_detail[:3]])
+                        top3_sectors = ', '.join([s.get('short_name', s['sector_name']) for s in dist_detail[:3]])
                         response += f"Tiga sektor teratas adalah {top3_sectors}."
                     
                     return response
@@ -394,6 +454,33 @@ PENTING: Berikan jawaban yang PASTI berdasarkan data yang ada. Jangan spekulatif
                         response += "."
                     
                     return response
+            
+            elif data_type == 'province_detail':
+                provinsi = analysis.get('provinsi', '')
+                total_usaha = analysis.get('total_usaha', 0)
+                top_sectors = analysis.get('top_sectors', [])
+                
+                response = f"Di {provinsi}, tercatat total {total_usaha:,} unit usaha. "
+                
+                if top_sectors:
+                    top = top_sectors[0]
+                    response += f"Sektor {top.get('short_name', top.get('name', ''))} mendominasi dengan {top['total']:,} usaha ({top.get('percentage', 0):.1f}%)."
+                
+                return response
+            
+            elif data_type == 'sector_analysis':
+                sector_names = analysis.get('sector_names', [])
+                total_usaha = analysis.get('total_usaha', 0)
+                top_provinces = analysis.get('top_provinces', [])
+                
+                sector_str = ', '.join(sector_names[:2]) if sector_names else 'sektor tersebut'
+                response = f"Sektor {sector_str} memiliki total {total_usaha:,} unit usaha di seluruh Indonesia. "
+                
+                if top_provinces:
+                    top = top_provinces[0]
+                    response += f"{top['provinsi']} memiliki jumlah terbanyak dengan {top['total']:,} usaha ({top.get('percentage', 0):.1f}%)."
+                
+                return response
             
             # Generic fallback
             total_usaha = analysis.get('total_usaha', 0)
