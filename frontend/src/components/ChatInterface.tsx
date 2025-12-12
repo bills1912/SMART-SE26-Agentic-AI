@@ -474,11 +474,11 @@ const ChatInterface: React.FC = () => {
               </div>
 
               {/* Status Text */}
-              <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-gray-500 dark:text-gray-400">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-2 px-1 text-[10px] text-gray-500 dark:text-gray-400 gap-1">
                 {/* Left: Status Indicators */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                   <div className="flex items-center gap-1">
-                    <Database className="h-2 w-2" />
+                    <Database className="h-2 w-2 flex-shrink-0" />
                     <span
                       className={
                         scrapingStatus === "in_progress"
@@ -493,7 +493,7 @@ const ChatInterface: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <div
-                      className={`w-1 h-1 rounded-full ${
+                      className={`w-1 h-1 rounded-full flex-shrink-0 ${
                         isBackendAvailable ? "bg-green-500" : "bg-red-500"
                       }`}
                     />
@@ -510,8 +510,8 @@ const ChatInterface: React.FC = () => {
                 </div>
 
                 {/* Right: AI Disclaimer */}
-                <p className="text-gray-400 dark:text-gray-500">
-                  AI can make mistakes. Please verify important information.
+                <p className="text-gray-400 dark:text-gray-500 text-[9px] sm:text-[10px]">
+                  AI can make mistakes. Verify info.
                 </p>
               </div>
             </div>
