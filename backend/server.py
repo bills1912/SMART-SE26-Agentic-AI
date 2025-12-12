@@ -82,6 +82,9 @@ api_router = APIRouter(prefix="/api")
 scraping_in_progress = False
 last_scraping_time = None
 
+# --- FRONTEND BUILD PATH (DEFINED EARLY) ---
+FRONTEND_BUILD_PATH = BACKEND_DIR.parent / "frontend" / "build"
+
 # --- 6. EVENT HANDLERS (STARTUP/SHUTDOWN) ---
 @app.on_event("startup")
 async def startup_event():
@@ -113,7 +116,13 @@ async def shutdown_event():
 # --- 7. ROOT ENDPOINT (HEALTH CHECK) ---
 @app.get("/")
 async def root():
-    """Root endpoint - health check"""
+    """Root endpoint - serve SPA or API info"""
+    # Check if frontend build exists
+    index_path = FRONTEND_BUILD_PATH / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path, media_type="text/html")
+    
+    # Fallback to API info if no frontend
     return {
         "message": "AI Policy & Insight Generator API", 
         "version": "1.0.0",
@@ -363,7 +372,7 @@ except Exception as e:
 # --- 11. EXCEPTION HANDLERS ---
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
-    """Custom 404 handler - avoid intercepting frontend routes"""
+    """Custom 404 handler - serve SPA for frontend routes"""
     path = request.url.path
     
     # If it's an API call, return JSON error
@@ -382,15 +391,18 @@ async def not_found_handler(request: Request, exc):
             }
         )
     
-    # For non-API paths, let them through (frontend will handle)
-    logger.info(f"Serving SPA for 404 path: {path}")
+    # For ALL non-API paths, serve index.html (SPA routing)
+    # This handles /login, /register, /dashboard, /auth/callback, etc.
     index_path = FRONTEND_BUILD_PATH / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        logger.info(f"Serving SPA index.html for path: {path}")
+        return FileResponse(index_path, media_type="text/html")
     
+    # Only return 404 if index.html doesn't exist
+    logger.error(f"Frontend index.html not found at {index_path}")
     return JSONResponse(
         status_code=404,
-        content={"detail": "Not found"}
+        content={"detail": "Frontend not deployed. Please build the frontend first."}
     )
 
 @app.exception_handler(500)
@@ -403,9 +415,6 @@ async def internal_error_handler(request: Request, exc):
     )
 
 # --- 12. STATIC FILES & SPA FALLBACK (FOR PRODUCTION) ---
-# Path ke frontend build
-FRONTEND_BUILD_PATH = BACKEND_DIR.parent / "frontend" / "build"
-
 # Check if frontend build exists
 if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists():
     logger.info(f"✓ Frontend build found at: {FRONTEND_BUILD_PATH}")
@@ -425,6 +434,10 @@ if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists(
         favicon_path = FRONTEND_BUILD_PATH / "favicon.ico"
         if favicon_path.exists():
             return FileResponse(favicon_path)
+        # Try .png version
+        favicon_png = FRONTEND_BUILD_PATH / "favicon.png"
+        if favicon_png.exists():
+            return FileResponse(favicon_png)
         raise HTTPException(status_code=404)
 
     @app.get("/manifest.json")
@@ -441,7 +454,10 @@ if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists(
             return FileResponse(robots_path)
         raise HTTPException(status_code=404)
     
-    # SPA Fallback - Serve index.html untuk semua non-API routes
+    # ============================================
+    # CRITICAL FIX: SPA Catch-All Route
+    # This MUST handle all frontend routes like /login, /register, /dashboard
+    # ============================================
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):
         """
@@ -449,15 +465,21 @@ if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists(
         Semua client-side routes akan serve index.html
         """
         # Skip if it's an API route (already handled by routers)
-        if full_path.startswith("api/"):
+        if full_path.startswith("api/") or full_path.startswith("api"):
             logger.warning(f"API endpoint not found: /{full_path}")
             raise HTTPException(status_code=404, detail="API endpoint not found")
         
+        # Check if it's a static file request
+        static_file = FRONTEND_BUILD_PATH / full_path
+        if static_file.exists() and static_file.is_file():
+            return FileResponse(static_file)
+        
         # Serve index.html untuk semua SPA routes
+        # This handles: /login, /register, /dashboard, /auth/callback, etc.
         index_path = FRONTEND_BUILD_PATH / "index.html"
         if index_path.exists():
             logger.info(f"Serving SPA for route: /{full_path}")
-            return FileResponse(index_path)
+            return FileResponse(index_path, media_type="text/html")
         
         logger.error("Frontend index.html not found")
         raise HTTPException(status_code=404, detail="Frontend not found")
@@ -466,6 +488,22 @@ if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists(
 else:
     logger.warning(f"✗ Frontend build NOT found at: {FRONTEND_BUILD_PATH}")
     logger.warning("⚠️  SPA routing will not work! Frontend must be built and deployed separately.")
+    
+    # Add fallback route when no frontend is built
+    @app.get("/{full_path:path}")
+    async def no_frontend_fallback(request: Request, full_path: str):
+        """Fallback when frontend is not built"""
+        if full_path.startswith("api/") or full_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Frontend not deployed",
+                "message": "Please build the frontend first using 'npm run build'",
+                "path": f"/{full_path}"
+            }
+        )
 
 # --- 13. LOG ALL ROUTES ON STARTUP ---
 @app.on_event("startup")
@@ -490,4 +528,6 @@ async def log_routes():
     
     logger.info("=" * 80)
     logger.info(f"Total routes: {len(routes_by_path)}")
+    logger.info(f"Frontend build path: {FRONTEND_BUILD_PATH}")
+    logger.info(f"Frontend exists: {FRONTEND_BUILD_PATH.exists()}")
     logger.info("=" * 80)
