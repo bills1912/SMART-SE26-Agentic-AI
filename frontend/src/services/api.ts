@@ -1,8 +1,12 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { ChatMessage, ChatSession, PolicyAnalysisRequest, PolicyAnalysisResponse } from '../types/chat';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// ===== PERBAIKAN: Gunakan full backend URL =====
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://smart-se26-agentic-ai.onrender.com';
 const API_BASE = `${BACKEND_URL}/api`;
+
+console.log('[API] Backend URL:', BACKEND_URL);
+console.log('[API] API Base:', API_BASE);
 
 // Timeout configurations
 const TIMEOUTS = {
@@ -29,19 +33,22 @@ class PolicyAPIService {
   constructor() {
     // Add request interceptor for logging
     this.api.interceptors.request.use((config) => {
-      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`[API] Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
       return config;
     });
 
     // Add response interceptor for error handling and retry
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log(`[API] Response: ${response.status} from ${response.config.url}`);
+        return response;
+      },
       async (error: AxiosError) => {
         const config = error.config as AxiosRequestConfig & { _retryCount?: number };
         
         // Don't retry if no config or already retried max times
         if (!config || (config._retryCount || 0) >= this.maxRetries) {
-          console.error('API Error:', error.response?.data || error.message);
+          console.error('[API] Error:', error.response?.status, error.response?.data || error.message);
           return Promise.reject(error);
         }
 
@@ -52,7 +59,7 @@ class PolicyAPIService {
 
         if (shouldRetry) {
           config._retryCount = (config._retryCount || 0) + 1;
-          console.log(`Retrying request (${config._retryCount}/${this.maxRetries})...`);
+          console.log(`[API] Retrying request (${config._retryCount}/${this.maxRetries})...`);
           
           // Wait before retrying
           await new Promise(resolve => setTimeout(resolve, this.retryDelay * config._retryCount!));
@@ -60,7 +67,7 @@ class PolicyAPIService {
           return this.api(config);
         }
 
-        console.error('API Error:', error.response?.data || error.message);
+        console.error('[API] Error:', error.response?.status, error.response?.data || error.message);
         return Promise.reject(error);
       }
     );
@@ -145,7 +152,7 @@ class PolicyAPIService {
   // Utility method to check if backend is available
   async isBackendAvailable(): Promise<boolean> {
     try {
-      await this.api.get('/', {
+      await this.api.get('/health', {
         timeout: TIMEOUTS.health
       });
       return true;
