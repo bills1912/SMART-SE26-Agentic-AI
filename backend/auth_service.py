@@ -17,6 +17,65 @@ class AuthService:
         self.session_duration_days = 30  # Extended from 7 to 30 days
         self.session_refresh_threshold_days = 7  # Auto-refresh if less than 7 days remaining
         self.emergent_auth_url = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+        
+        # Determine environment
+        self.is_production = os.environ.get('ENVIRONMENT', 'production') == 'production'
+        
+        # CRITICAL: Check if cross-origin deployment
+        # If frontend and backend are on different domains, we need SameSite=None
+        self.is_cross_origin = self._check_cross_origin()
+        
+        logger.info(f"AuthService initialized: production={self.is_production}, cross_origin={self.is_cross_origin}")
+
+    def _check_cross_origin(self) -> bool:
+        """
+        Check if frontend and backend are on different origins.
+        This determines if we need SameSite=None for cookies.
+        """
+        # Check environment variable first
+        cross_origin_env = os.environ.get('CROSS_ORIGIN_AUTH', 'true').lower()
+        if cross_origin_env in ('true', '1', 'yes'):
+            return True
+        
+        # Check if running on Render (different subdomains = cross-origin)
+        render_service = os.environ.get('RENDER_SERVICE_NAME', '')
+        if render_service:
+            return True  # Render deployments are typically cross-origin
+        
+        return False
+
+    def _get_cookie_settings(self) -> Dict[str, Any]:
+        """
+        Get cookie settings based on environment.
+        
+        CRITICAL for cross-origin:
+        - SameSite=None requires Secure=True
+        - This allows cookies to be sent in cross-origin requests
+        """
+        if self.is_cross_origin and self.is_production:
+            # Cross-origin production (e.g., Render with separate frontend/backend)
+            return {
+                "httponly": True,
+                "secure": True,  # MUST be True when SameSite=None
+                "samesite": "none",  # Allows cross-origin cookie sending
+                "path": "/",
+            }
+        elif self.is_production:
+            # Same-origin production
+            return {
+                "httponly": True,
+                "secure": True,
+                "samesite": "lax",
+                "path": "/",
+            }
+        else:
+            # Development (localhost)
+            return {
+                "httponly": True,
+                "secure": False,
+                "samesite": "lax",
+                "path": "/",
+            }
 
     def generate_user_id(self) -> str:
         """Generate unique user ID"""
@@ -39,13 +98,17 @@ class AuthService:
         # Check cookies first
         session_token = request.cookies.get('session_token')
         if session_token:
+            logger.debug(f"Found session token in cookies: {session_token[:20]}...")
             return session_token
         
         # Fallback to Authorization header
         auth_header = request.headers.get('Authorization')
         if auth_header and auth_header.startswith('Bearer '):
-            return auth_header.split(' ')[1]
+            token = auth_header.split(' ')[1]
+            logger.debug(f"Found session token in Authorization header: {token[:20]}...")
+            return token
         
+        logger.debug("No session token found in request")
         return None
 
     async def verify_session_token(self, session_token: str) -> Optional[User]:
@@ -136,11 +199,13 @@ class AuthService:
         session_token = await self.get_session_token_from_request(request)
         
         if not session_token:
+            logger.debug("No session token in request")
             raise HTTPException(status_code=401, detail="Not authenticated")
         
         user = await self.verify_session_token(session_token)
         
         if not user:
+            logger.debug("Session token invalid or expired")
             raise HTTPException(status_code=401, detail="Invalid or expired session")
         
         return user
@@ -234,22 +299,20 @@ class AuthService:
             upsert=True
         )
         
-        # Determine if we're in production (HTTPS)
-        is_production = os.environ.get('ENVIRONMENT', 'development') == 'production'
+        # Get cookie settings based on environment
+        cookie_settings = self._get_cookie_settings()
         
         # Set httpOnly cookie with proper settings
         response.set_cookie(
             key="session_token",
             value=session_token,
-            httponly=True,
-            secure=is_production,  # True in production with HTTPS
-            samesite="lax",
-            path="/",
             max_age=self.session_duration_days * 24 * 60 * 60,  # 30 days in seconds
-            expires=expires_at
+            expires=expires_at,
+            **cookie_settings
         )
         
         logger.info(f"Created session for user {user_id}, expires at {expires_at}")
+        logger.info(f"Cookie settings: {cookie_settings}")
         return session_token
 
     async def register_user(self, register_data: RegisterRequest) -> User:
@@ -316,12 +379,15 @@ class AuthService:
         result = await self.db.user_sessions.delete_one({"session_token": session_token})
         logger.info(f"Deleted {result.deleted_count} session(s)")
         
+        # Get cookie settings for deletion (must match set_cookie settings)
+        cookie_settings = self._get_cookie_settings()
+        
         # Clear cookie with matching parameters
         response.delete_cookie(
             key="session_token",
-            path="/",
-            httponly=True,
-            samesite="lax"
+            path=cookie_settings["path"],
+            samesite=cookie_settings["samesite"],
+            secure=cookie_settings["secure"],
         )
 
     async def cleanup_expired_sessions(self):
