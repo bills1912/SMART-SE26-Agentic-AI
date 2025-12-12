@@ -1,543 +1,523 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Mic, Plus, History, Download, Settings, TrendingUp, Lightbulb, FileText, ChevronRight, X, Loader2 } from 'lucide-react';
-import api from '../services/api';
-import { PolicyAnalysisRequest, PolicyAnalysisResponse, ChatSession, ChatMessage } from '../types/chat';
-import DataVisualization from './DataVisualization';
-import InsightsPanel from './InsightsPanel';
-import PolicyPanel from './PolicyPanel';
-import ReportModal from './ReportModal';
-
-// Interface untuk message dengan data terkait
-interface ChatMessageWithData {
-  id: string;
-  sender: 'user' | 'ai';
-  content: string;
-  timestamp: Date;
-  // Data spesifik untuk message ini (hanya untuk AI responses)
-  visualizations?: any[];
-  insights?: string[];
-  policies?: any[];
-}
-
-interface ExpandedSection {
-  messageId: string;
-  section: 'visualizations' | 'insights' | 'policies' | 'report';
-}
+import React, { useState, useRef, useEffect } from "react";
+import { Send, Bot, User, Loader2, Database, Menu } from "lucide-react";
+import { ChatMessage } from "../types/chat";
+import MessageBubble from "./MessageBubble";
+import { toast } from "../hooks/use-toast";
+import apiService from "../services/api";
+import ThemeToggle from "./ThemeToggle";
+import ChatSidebar from "./ChatSidebar";
+import CollapsedSidebar from "./CollapsedSidebar";
+import VoiceRecorder from "./VoiceRecorder";
+import UserMenu from "./UserMenu";
+import NewChatWelcome from "./NewChatWelcome";
+import { useChat } from "../contexts/ChatContext";
 
 const ChatInterface: React.FC = () => {
-  // Session state
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  
-  // Messages state - setiap message punya data sendiri
-  const [messages, setMessages] = useState<ChatMessageWithData[]>([]);
-  const [inputValue, setInputValue] = useState('');
+  const {
+    currentSession,
+    addMessageToCurrentSession,
+    updateMessageInCurrentSession,
+    createNewChat,
+    exportCurrentChat,
+  } = useChat();
+  const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Expanded section state - track which message's section is expanded
-  const [expandedSection, setExpandedSection] = useState<ExpandedSection | null>(null);
-  
-  // Report modal state
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportMessageId, setReportMessageId] = useState<string | null>(null);
-  
-  // Refs
+  const [scrapingStatus, setScrapingStatus] = useState<"idle" | "in_progress">(
+    "idle"
+  );
+  const [isBackendAvailable, setIsBackendAvailable] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mainContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Handle voice transcript
+  const handleVoiceTranscript = (transcript: string) => {
+    if (transcript.trim()) {
+      setInputMessage((prev) => (prev + " " + transcript).trim());
+      // Auto-focus textarea after voice input
+      textareaRef.current?.focus();
+    }
+  };
 
-  // Load sessions on mount
+  // Get messages from current session
+  const messages = currentSession?.messages || [];
+
+  // Filter out welcome messages to show welcome screen for new chat
+  const realMessages = messages.filter(
+    (msg) => !msg.id?.startsWith("welcome_")
+  );
+
+  // Check if this is a new empty chat
+  const isNewChat = currentSession && realMessages.length === 0;
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToTop = () => {
+    if (mainContainerRef.current) {
+      mainContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  // Scroll management for messages
   useEffect(() => {
-    loadSessions();
+    if (realMessages.length > 0) {
+      // For first 2 messages (user + AI response), scroll to top
+      if (realMessages.length <= 2) {
+        setTimeout(() => {
+          scrollToTop();
+        }, 300);
+      } else {
+        // For subsequent messages, scroll to bottom
+        scrollToBottom();
+      }
+    }
+  }, [realMessages.length]);
+
+  useEffect(() => {
+    // Check backend availability and get initial status
+    checkBackendStatus();
   }, []);
 
-  const loadSessions = async () => {
+  const checkBackendStatus = async () => {
     try {
-      const response = await api.get('/sessions');
-      setSessions(response.data);
+      const available = await apiService.isBackendAvailable();
+      setIsBackendAvailable(available);
+
+      if (available) {
+        const health = await apiService.getHealth();
+        setScrapingStatus(health.scraping_status);
+      }
     } catch (error) {
-      console.error('Error loading sessions:', error);
+      setIsBackendAvailable(false);
+      console.error("Backend not available:", error);
     }
   };
 
-  const loadSession = async (id: string) => {
-    try {
-      const response = await api.get(`/sessions/${id}`);
-      const session: ChatSession = response.data;
-      setSessionId(id);
-      
-      // Convert session messages to ChatMessageWithData format
-      const convertedMessages: ChatMessageWithData[] = session.messages.map((msg: ChatMessage) => ({
-        id: msg.id,
-        sender: msg.sender,
-        content: msg.content,
-        timestamp: new Date(msg.timestamp),
-        // Attach data only to AI messages
-        visualizations: msg.sender === 'ai' ? msg.visualizations || [] : undefined,
-        insights: msg.sender === 'ai' ? msg.insights || [] : undefined,
-        policies: msg.sender === 'ai' ? msg.policies || [] : undefined,
-      }));
-      
-      setMessages(convertedMessages);
-      setShowHistory(false);
-      
-      // Reset expanded section when loading new session
-      setExpandedSection(null);
-    } catch (error) {
-      console.error('Error loading session:', error);
+  // Handle edit message - Claude style: edit and resubmit
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (!currentSession || !newContent.trim()) return;
+
+    // Find the message index
+    const messageIndex = currentSession.messages.findIndex(
+      (msg) => msg.id === messageId
+    );
+    if (messageIndex === -1) return;
+
+    // Update the message content
+    if (updateMessageInCurrentSession) {
+      updateMessageInCurrentSession(messageId, newContent);
+    }
+
+    // If it's a user message, we need to regenerate the AI response
+    const editedMessage = currentSession.messages[messageIndex];
+    if (editedMessage.sender === "user") {
+      // Remove all messages after the edited message
+      // Then send the edited message as a new query
+      setIsLoading(true);
+
+      try {
+        // Call API with edited message
+        const response = await apiService.sendMessage(
+          newContent,
+          currentSession.id
+        );
+
+        // Create AI response message
+        const aiResponse: ChatMessage = {
+          id: response.session_id + "_" + Date.now(),
+          session_id: response.session_id,
+          sender: "ai",
+          content: response.message,
+          timestamp: new Date(),
+          visualizations: response.visualizations || [],
+          insights: response.insights || [],
+          policies: response.policies || [],
+        };
+
+        // Add AI response to session
+        addMessageToCurrentSession(aiResponse);
+
+        toast({
+          title: "Message Updated",
+          description:
+            "Your message has been edited and a new response generated.",
+        });
+      } catch (error: any) {
+        console.error("Error regenerating response:", error);
+        toast({
+          title: "Error",
+          description: "Failed to regenerate response. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
-  const startNewChat = () => {
-    setSessionId(null);
-    setMessages([]);
-    setExpandedSection(null);
-    setShowHistory(false);
-  };
+  // Handle regenerate AI response
+  const handleRegenerateResponse = async (messageId: string) => {
+    if (!currentSession || isLoading) return;
 
-  const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    // Find the AI message
+    const aiMessageIndex = currentSession.messages.findIndex(
+      (msg) => msg.id === messageId
+    );
+    if (aiMessageIndex === -1) return;
 
-    const userMessage: ChatMessageWithData = {
-      id: `user_${Date.now()}`,
-      sender: 'user',
-      content: inputValue.trim(),
-      timestamp: new Date(),
-    };
+    // Find the preceding user message
+    let userMessage: ChatMessage | null = null;
+    for (let i = aiMessageIndex - 1; i >= 0; i--) {
+      if (currentSession.messages[i].sender === "user") {
+        userMessage = currentSession.messages[i];
+        break;
+      }
+    }
 
-    // Add user message
-    setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
+    if (!userMessage) return;
+
     setIsLoading(true);
-    
-    // Reset expanded section for new conversation turn
-    setExpandedSection(null);
 
     try {
-      const request: PolicyAnalysisRequest = {
-        message: userMessage.content,
-        session_id: sessionId || undefined,
-        include_visualizations: true,
-        include_insights: true,
-        include_policies: true,
-      };
+      // Call API to regenerate
+      const response = await apiService.sendMessage(
+        userMessage.content,
+        currentSession.id
+      );
 
-      const response = await api.post('/chat', request, {
-        timeout: 120000, // 2 minutes for AI analysis
-      });
-      
-      const data: PolicyAnalysisResponse = response.data;
-
-      // Update session ID if new
-      if (!sessionId && data.session_id) {
-        setSessionId(data.session_id);
+      // Update the AI message with new content
+      if (updateMessageInCurrentSession) {
+        updateMessageInCurrentSession(messageId, response.message);
       }
 
-      // Create AI message with its own data
-      const aiMessage: ChatMessageWithData = {
-        id: `ai_${Date.now()}`,
-        sender: 'ai',
-        content: data.message,
-        timestamp: new Date(),
-        // Attach response data to THIS specific message
-        visualizations: data.visualizations || [],
-        insights: data.insights || [],
-        policies: data.policies || [],
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-
-    } catch (error) {
-      console.error('Error sending message:', error);
-      
-      const errorMessage: ChatMessageWithData = {
-        id: `error_${Date.now()}`,
-        sender: 'ai',
-        content: 'Maaf, terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi.',
-        timestamp: new Date(),
-        visualizations: [],
-        insights: [],
-        policies: [],
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
+      toast({
+        title: "Response Regenerated",
+        description: "A new response has been generated.",
+      });
+    } catch (error: any) {
+      console.error("Error regenerating response:", error);
+      toast({
+        title: "Error",
+        description: "Failed to regenerate response. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading || !currentSession) return;
 
-  const toggleSection = (messageId: string, section: ExpandedSection['section']) => {
-    if (expandedSection?.messageId === messageId && expandedSection?.section === section) {
-      setExpandedSection(null);
-    } else {
-      setExpandedSection({ messageId, section });
-    }
-  };
-
-  const openReportModal = (messageId: string) => {
-    setReportMessageId(messageId);
-    setShowReportModal(true);
-  };
-
-  // Get data for currently expanded section
-  const getExpandedData = useCallback(() => {
-    if (!expandedSection) return null;
-    
-    const message = messages.find(m => m.id === expandedSection.messageId);
-    if (!message || message.sender !== 'ai') return null;
-    
-    return {
-      visualizations: message.visualizations || [],
-      insights: message.insights || [],
-      policies: message.policies || [],
+    const userMessage: ChatMessage = {
+      id: Math.random().toString(36).substr(2, 9),
+      session_id: currentSession.id || "",
+      sender: "user",
+      content: inputMessage.trim(),
+      timestamp: new Date(),
     };
-  }, [expandedSection, messages]);
 
-  // Render action buttons for AI message
-  const renderMessageActions = (message: ChatMessageWithData) => {
-    if (message.sender !== 'ai') return null;
-    
-    const vizCount = message.visualizations?.length || 0;
-    const insightCount = message.insights?.length || 0;
-    const policyCount = message.policies?.length || 0;
-    
-    // Don't show action buttons if no data
-    if (vizCount === 0 && insightCount === 0 && policyCount === 0) {
-      return null;
+    // Add user message to session
+    addMessageToCurrentSession(userMessage);
+
+    const originalMessage = inputMessage.trim();
+    setInputMessage("");
+    setIsLoading(true);
+
+    try {
+      if (!isBackendAvailable) {
+        throw new Error("Backend service is currently unavailable");
+      }
+
+      // Call real API
+      const response = await apiService.sendMessage(
+        originalMessage,
+        currentSession.id
+      );
+
+      // Create AI response message
+      const aiResponse: ChatMessage = {
+        id: response.session_id + "_" + Date.now(),
+        session_id: response.session_id,
+        sender: "ai",
+        content: response.message,
+        timestamp: new Date(),
+        visualizations: response.visualizations || [],
+        insights: response.insights || [],
+        policies: response.policies || [],
+      };
+
+      // Add AI response to session
+      addMessageToCurrentSession(aiResponse);
+
+      toast({
+        title: "Analysis Complete",
+        description: `AI policy analysis generated successfully. ${
+          response.supporting_data_count > 0
+            ? `Used ${response.supporting_data_count} data sources.`
+            : ""
+        }`,
+      });
+
+      // Update scraping status
+      const health = await apiService.getHealth();
+      setScrapingStatus(health.scraping_status);
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+
+      // Fallback response for errors
+      const errorResponse: ChatMessage = {
+        id: "error_" + Date.now(),
+        session_id: currentSession.id || "",
+        sender: "ai",
+        content:
+          "I apologize, but I encountered an issue while analyzing your policy question. This could be due to high demand or temporary service issues. Please try again in a moment.",
+        timestamp: new Date(),
+      };
+
+      addMessageToCurrentSession(errorResponse);
+
+      toast({
+        title: "Connection Error",
+        description: isBackendAvailable
+          ? "Failed to analyze policy. Please try again."
+          : "AI service is temporarily unavailable. Please check your connection.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    const isExpanded = (section: ExpandedSection['section']) => 
-      expandedSection?.messageId === message.id && expandedSection?.section === section;
-
-    return (
-      <div className="mt-3 space-y-2">
-        {/* Visualizations Button */}
-        {vizCount > 0 && (
-          <button
-            onClick={() => toggleSection(message.id, 'visualizations')}
-            className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-              isExpanded('visualizations') 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-5 h-5" />
-              <div className="text-left">
-                <div className="font-medium">Data Visualizations</div>
-                <div className="text-sm opacity-75">{vizCount} charts</div>
-              </div>
-            </div>
-            <ChevronRight className={`w-5 h-5 transition-transform ${isExpanded('visualizations') ? 'rotate-90' : ''}`} />
-          </button>
-        )}
-
-        {/* Insights Button */}
-        {insightCount > 0 && (
-          <button
-            onClick={() => toggleSection(message.id, 'insights')}
-            className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-              isExpanded('insights') 
-                ? 'bg-yellow-600 text-white' 
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Lightbulb className="w-5 h-5" />
-              <div className="text-left">
-                <div className="font-medium">Key Insights</div>
-                <div className="text-sm opacity-75">{insightCount} insights</div>
-              </div>
-            </div>
-            <ChevronRight className={`w-5 h-5 transition-transform ${isExpanded('insights') ? 'rotate-90' : ''}`} />
-          </button>
-        )}
-
-        {/* Policies Button */}
-        {policyCount > 0 && (
-          <button
-            onClick={() => toggleSection(message.id, 'policies')}
-            className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-              isExpanded('policies') 
-                ? 'bg-orange-600 text-white' 
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <FileText className="w-5 h-5" />
-              <div className="text-left">
-                <div className="font-medium">Policy Recommendations</div>
-                <div className="text-sm opacity-75">{policyCount} recommendations</div>
-              </div>
-            </div>
-            <ChevronRight className={`w-5 h-5 transition-transform ${isExpanded('policies') ? 'rotate-90' : ''}`} />
-          </button>
-        )}
-
-        {/* Download Report Button - only if has any data */}
-        <button
-          onClick={() => openReportModal(message.id)}
-          className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <Download className="w-5 h-5" />
-            <div className="text-left">
-              <div className="font-medium">Unduh Laporan Lengkap</div>
-              <div className="text-sm opacity-75">1 report</div>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
-    );
   };
 
-  // Render expanded panel
-  const renderExpandedPanel = () => {
-    if (!expandedSection) return null;
-    
-    const data = getExpandedData();
-    if (!data) return null;
-
-    return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-gray-800 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <h2 className="text-xl font-bold text-white">
-              {expandedSection.section === 'visualizations' && 'Data Visualizations'}
-              {expandedSection.section === 'insights' && 'Key Insights'}
-              {expandedSection.section === 'policies' && 'Policy Recommendations'}
-            </h2>
-            <button
-              onClick={() => setExpandedSection(null)}
-              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-          
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {expandedSection.section === 'visualizations' && (
-              <DataVisualization visualizations={data.visualizations} />
-            )}
-            {expandedSection.section === 'insights' && (
-              <InsightsPanel insights={data.insights} />
-            )}
-            {expandedSection.section === 'policies' && (
-              <PolicyPanel policies={data.policies} />
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   return (
-    <div className="flex h-screen bg-gray-900">
-      {/* Sidebar */}
-      <div className="w-16 bg-gray-800 flex flex-col items-center py-4 gap-4">
-        <button
-          onClick={startNewChat}
-          className="p-3 rounded-xl bg-orange-600 hover:bg-orange-500 transition-colors"
-          title="New Chat"
-        >
-          <Plus className="w-5 h-5 text-white" />
-        </button>
-        
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          className={`p-3 rounded-xl transition-colors ${showHistory ? 'bg-gray-600' : 'hover:bg-gray-700'}`}
-          title="History"
-        >
-          <History className="w-5 h-5 text-gray-300" />
-        </button>
-        
-        <button
-          className="p-3 rounded-xl hover:bg-gray-700 transition-colors"
-          title="Downloads"
-        >
-          <Download className="w-5 h-5 text-gray-300" />
-        </button>
-        
-        <div className="flex-1" />
-        
-        <button
-          className="p-3 rounded-xl hover:bg-gray-700 transition-colors"
-          title="Settings"
-        >
-          <Settings className="w-5 h-5 text-gray-300" />
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+      {/* Chat Sidebar - Overlay on mobile, fixed on desktop */}
+      <ChatSidebar
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+      />
 
-      {/* History Panel */}
-      {showHistory && (
-        <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto">
-          <div className="p-4">
-            <h3 className="text-lg font-semibold text-white mb-4">Chat History</h3>
-            {sessions.length === 0 ? (
-              <p className="text-gray-400 text-sm">No previous chats</p>
-            ) : (
-              <div className="space-y-2">
-                {sessions.map(session => (
-                  <button
-                    key={session.id}
-                    onClick={() => loadSession(session.id)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
-                      sessionId === session.id ? 'bg-gray-600' : 'hover:bg-gray-700'
-                    }`}
-                  >
-                    <div className="text-white text-sm font-medium truncate">
-                      {session.title}
-                    </div>
-                    <div className="text-gray-400 text-xs">
-                      {new Date(session.updated_at).toLocaleDateString()}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+      {/* Backdrop blur for mobile when sidebar open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Collapsed Sidebar - Icons only when sidebar closed - DESKTOP ONLY */}
+      {!sidebarOpen && (
+        <div className="hidden lg:block">
+          <CollapsedSidebar
+            onNewChat={createNewChat}
+            onShowHistory={() => setSidebarOpen(true)}
+            onExport={exportCurrentChat}
+          />
         </div>
       )}
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-white" />
+      {/* Main Content - Claude-style FULL SCREEN SCROLL */}
+      <div
+        ref={mainContainerRef}
+        className={`flex-1 h-screen overflow-y-auto transition-all duration-300 ${
+          sidebarOpen ? "lg:ml-80" : "lg:ml-16"
+        }`}
+      >
+        {/* Compact Header */}
+        <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1 sticky top-0 bg-white dark:bg-gray-900 z-10">
+          <div className="flex items-center justify-between">
+            {/* Left: Mobile menu button + Title */}
+            <div className="flex items-center gap-1.5">
+              {/* Mobile Menu Toggle Button */}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                aria-label="Toggle sidebar"
+              >
+                <Menu className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+              </button>
+
+              <div className="w-5 h-5 bg-gradient-to-br from-red-500 to-orange-600 rounded flex items-center justify-center">
+                <Bot className="h-2.5 w-2.5 text-white" />
+              </div>
+              <h1 className="text-sm font-medium text-gray-800 dark:text-white">
+                AI Policy & Insight Generator
+              </h1>
             </div>
-            <h1 className="text-lg font-semibold text-white">AI Policy & Insight Generator</h1>
+
+            {/* Right: Controls */}
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <UserMenu />
+            </div>
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-orange-600/20 flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-8 h-8 text-orange-500" />
+        {/* Chat Messages Area OR Welcome Screen */}
+        {isNewChat ? (
+          // KONDISI 1: NEW CHAT (TAMPILAN TENGAH)
+          <div className="flex flex-col justify-center min-h-[calc(100vh-60px)]">
+            <NewChatWelcome
+              inputMessage={inputMessage}
+              setInputMessage={setInputMessage}
+              handleSendMessage={handleSendMessage}
+              isLoading={isLoading}
+              onVoiceTranscript={handleVoiceTranscript}
+            />
+          </div>
+        ) : (
+          /* Normal Chat Messages */
+          <div className="min-h-full transition-all duration-700 ease-in opacity-100">
+            <div className="max-w-3xl mx-auto px-4 pt-3">
+              <div className="space-y-6">
+                {realMessages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    onEdit={handleEditMessage}
+                    onRegenerate={handleRegenerateResponse}
+                  />
+                ))}
+                {isLoading && (
+                  <div className="flex items-center gap-3 p-4">
+                    <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-200">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>
+                        {scrapingStatus === "in_progress"
+                          ? "Mengumpulkan data sensus terbaru..."
+                          : "Menganalisis pertanyaan Anda..."}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Input Container */}
+        {!isNewChat && (
+          <div
+            className={`sticky bottom-0 pb-4 transition-all duration-500 ${
+              isNewChat
+                ? "bg-transparent pt-3"
+                : "bg-gradient-to-t from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4"
+            }`}
+          >
+            <div
+              className={`mx-auto px-4 transition-all duration-500 ${
+                isNewChat ? "max-w-2xl" : "max-w-4xl"
+              }`}
+            >
+              {/* Single Input Container */}
+              <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
+                {/* Textarea Area */}
+                <div className="relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Reply..."
+                    className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none text-sm custom-scrollbar focus:outline-none border-0 transition-none"
+                    style={{
+                      minHeight: "44px",
+                      maxHeight: "120px",
+                      boxShadow: "none",
+                      outline: "none",
+                    }}
+                    disabled={isLoading}
+                    rows={1}
+                  />
                 </div>
-                <h2 className="text-xl font-semibold text-white mb-2">
-                  Selamat Datang!
-                </h2>
-                <p className="text-gray-400 max-w-md">
-                  Tanyakan apa saja tentang data Sensus Ekonomi Indonesia. 
-                  Saya dapat membantu menganalisis jumlah usaha per provinsi, sektor, dan memberikan insight kebijakan.
+
+                {/* Controls Row */}
+                <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800">
+                  {/* Left: Voice Recording Button */}
+                  <div className="flex items-center">
+                    <VoiceRecorder
+                      onTranscriptChange={handleVoiceTranscript}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  {/* Right: Send Button */}
+                  <div className="flex items-center">
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || !inputMessage.trim()}
+                      className="p-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                      title={isLoading ? "Analyzing..." : "Send message"}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Text */}
+              <div className="flex flex-col items-center justify-center mt-2 px-1 text-[10px] text-gray-500 dark:text-gray-400 gap-1.5">
+                {/* Status Indicators - Centered */}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex items-center gap-1">
+                    <Database className="h-2 w-2 flex-shrink-0" />
+                    <span
+                      className={
+                        scrapingStatus === "in_progress"
+                          ? "text-orange-600 dark:text-orange-400"
+                          : ""
+                      }
+                    >
+                      {scrapingStatus === "in_progress"
+                        ? "Gathering data..."
+                        : "Data ready"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div
+                      className={`w-1 h-1 rounded-full flex-shrink-0 ${
+                        isBackendAvailable ? "bg-green-500" : "bg-red-500"
+                      }`}
+                    />
+                    <span
+                      className={
+                        isBackendAvailable
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                      }
+                    >
+                      {isBackendAvailable ? "Connected" : "Offline"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* AI Disclaimer - Centered */}
+                <p className="text-gray-400 dark:text-gray-500 text-[9px] sm:text-[10px] text-center">
+                  AI can make mistakes. Verify info.
                 </p>
               </div>
             </div>
-          ) : (
-            messages.map(message => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-3xl rounded-2xl p-4 ${
-                    message.sender === 'user'
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-gray-800 text-gray-100'
-                  }`}
-                >
-                  {/* Message Content */}
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                  
-                  {/* Timestamp */}
-                  <div className={`text-xs mt-2 ${message.sender === 'user' ? 'text-orange-200' : 'text-gray-500'}`}>
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                  
-                  {/* Action Buttons - Only for AI messages with data */}
-                  {renderMessageActions(message)}
-                </div>
-              </div>
-            ))
-          )}
-          
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-800 rounded-2xl p-4 flex items-center gap-3">
-                <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
-                <span className="text-gray-300">Menganalisis data...</span>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="p-4 border-t border-gray-700">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-end gap-3 bg-gray-800 rounded-xl p-3">
-              <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-                <Mic className="w-5 h-5 text-gray-400" />
-              </button>
-              
-              <textarea
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Reply..."
-                className="flex-1 bg-transparent text-white placeholder-gray-500 resize-none outline-none min-h-[24px] max-h-32"
-                rows={1}
-              />
-              
-              <button
-                onClick={sendMessage}
-                disabled={!inputValue.trim() || isLoading}
-                className="p-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                <Send className="w-5 h-5 text-white" />
-              </button>
-            </div>
-            
-            <div className="text-center mt-2">
-              <span className="text-xs text-gray-500">
-                📊 Data ready • <span className="text-green-500">● Connected</span>
-              </span>
-              <br />
-              <span className="text-xs text-gray-600">AI can make mistakes. Verify info.</span>
-            </div>
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Expanded Panel Modal */}
-      {renderExpandedPanel()}
-
-      {/* Report Modal */}
-      {showReportModal && sessionId && (
-        <ReportModal
-          isOpen={showReportModal}
-          sessionId={sessionId}
-          onClose={() => {
-            setShowReportModal(false);
-            setReportMessageId(null);
-          }}
-          // Pass the specific message's data to report modal
-          message={messages.find(m => m.id === reportMessageId) as any}
-        />
-      )}
     </div>
   );
 };
