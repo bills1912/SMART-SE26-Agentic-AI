@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import List, Optional
 import asyncio
 
-# --- 1. KONFIGURASI ENV ---
+# --- 1. KONFIGURASI ENV (FIXED) ---
+# Mengambil path folder backend saat ini
 BACKEND_DIR = Path(__file__).resolve().parent
+# Naik satu level ke root, lalu masuk ke frontend/.env
 ENV_PATH = BACKEND_DIR.parent / 'frontend' / '.env'
 load_dotenv(ENV_PATH)
 
@@ -21,10 +23,43 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- 3. SETUP APLIKASI FASTAPI ---
+# --- 3. IMPORT CUSTOM MODULES ---
+# Import models & database
+from models import (
+    PolicyAnalysisRequest, 
+    PolicyAnalysisResponse, 
+    ChatSession, 
+    ChatMessage,
+    ScrapedData
+)
+from database import PolicyDatabase
+from ai_analyzer import PolicyAIAnalyzer
+from report_generator import ReportGenerator
+
+# --- 4. INISIALISASI DATABASE & AI (CRITICAL FIX) ---
+# Mengambil URL dari environment variable
+mongo_url = os.environ.get('MONGO_URL')
+db_name = os.environ.get('DB_NAME', 'policy_db')
+
+if not mongo_url:
+    logger.error("CRITICAL: MONGO_URL not found in .env file!")
+    raise ValueError("MONGO_URL is not set. Please check your .env file.")
+
+# Inisialisasi Database Object (Global Variable)
+policy_db = PolicyDatabase(mongo_url, db_name)
+
+# AI Analyzer akan diinit di startup event setelah database ready
+ai_analyzer = None
+
+# Report Generator
+report_generator = ReportGenerator()
+
+# --- 5. SETUP APLIKASI FASTAPI ---
 app = FastAPI(title="AI Policy & Insight Generator", version="1.0.0")
 
-# --- 4. CORS MIDDLEWARE (PENTING: SEBELUM SEMUA MIDDLEWARE LAIN) ---
+# ============================================
+# CRITICAL FIX: ADD CORS MIDDLEWARE FIRST (BEFORE ANYTHING ELSE)
+# ============================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -38,48 +73,32 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# --- 5. IMPORT CUSTOM MODULES ---
-from models import (
-    PolicyAnalysisRequest, 
-    PolicyAnalysisResponse, 
-    ChatSession, 
-    ChatMessage,
-    ScrapedData
-)
-from database import PolicyDatabase
-from ai_analyzer import PolicyAIAnalyzer
-from report_generator import ReportGenerator
+logger.info("✓ CORS middleware configured")
 
-# --- 6. INISIALISASI DATABASE & AI ---
-mongo_url = os.environ.get('MONGO_URL')
-db_name = os.environ.get('DB_NAME', 'policy_db')
+# Create router
+api_router = APIRouter(prefix="/api")
 
-if not mongo_url:
-    logger.error("CRITICAL: MONGO_URL not found in .env file!")
-    raise ValueError("MONGO_URL is not set. Please check your .env file.")
-
-policy_db = PolicyDatabase(mongo_url, db_name)
-ai_analyzer = None
-report_generator = ReportGenerator()
-
-# Global variables
+# Global variables for background tasks
 scraping_in_progress = False
 last_scraping_time = None
 
-# --- 7. EVENT HANDLERS ---
+# --- 6. EVENT HANDLERS (STARTUP/SHUTDOWN) ---
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
     global ai_analyzer
     try:
+        # Initialize database collections
         await policy_db.init_collections()
-        logger.info("Connected to MongoDB Atlas successfully")
+        logger.info("✓ Connected to MongoDB Atlas successfully")
         
+        # Initialize AI Analyzer with RAW database object (not PolicyDatabase wrapper)
+        # PolicyAnalyzer expects AsyncIOMotorDatabase
         ai_analyzer = PolicyAIAnalyzer(policy_db.db)
-        logger.info("AI Analyzer initialized successfully")
+        logger.info("✓ AI Analyzer initialized successfully")
         
     except Exception as e:
-        logger.error(f"Error during startup: {e}", exc_info=True)
+        logger.error(f"✗ Error during startup: {e}", exc_info=True)
         raise
 
 @app.on_event("shutdown")
@@ -91,10 +110,24 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 
-# --- 8. API ROUTER ---
-api_router = APIRouter(prefix="/api")
+# --- 7. ROOT ENDPOINT (HEALTH CHECK) ---
+@app.get("/")
+async def root():
+    """Root endpoint - health check"""
+    return {
+        "message": "AI Policy & Insight Generator API", 
+        "version": "1.0.0",
+        "status": "online",
+        "endpoints": {
+            "api": "/api",
+            "health": "/api/health",
+            "auth": "/api/auth",
+            "docs": "/docs"
+        }
+    }
 
-# --- 9. API ENDPOINTS ---
+# --- 8. API ROUTES / ENDPOINTS ---
+
 @api_router.get("/")
 async def api_root():
     return {"message": "API is running", "version": "1.0.0"}
@@ -118,86 +151,322 @@ async def health_check():
             content={"status": "unhealthy", "error": str(e)}
         )
 
-# ... (sisanya dari API routes kamu, chat, sessions, dll)
+@api_router.post("/chat", response_model=PolicyAnalysisResponse)
+async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: BackgroundTasks):
+    try:
+        if not ai_analyzer:
+            raise HTTPException(status_code=503, detail="AI Analyzer not initialized")
+        
+        logger.info(f"📝 Received chat request: {request.message[:50]}...")
+        
+        # Get or create session
+        session_id = request.session_id
+        if not session_id:
+            session = await policy_db.create_chat_session()
+            session_id = session.id
+        else:
+            existing_session = await policy_db.get_chat_session(session_id)
+            if not existing_session:
+                session = await policy_db.create_chat_session()
+                session_id = session.id
 
-# --- 10. REGISTER API ROUTER ---
+        # Save user message
+        user_message = ChatMessage(
+            session_id=session_id,
+            sender="user",
+            content=request.message
+        )
+        await policy_db.save_chat_message(user_message)
+        
+        # ========================================
+        # MULTI-AGENT ANALYSIS
+        # Data diambil langsung dari initial_data collection
+        # ========================================
+        
+        # Analyze with AI using multi-agent system
+        analysis_result = await ai_analyzer.analyze_policy_query(
+            query=request.message,
+            language="Indonesian",
+            scraped_data=None  # Not used - agents get data from initial_data
+        )
+        
+        logger.info(f"✓ Analysis completed for session {session_id}")
+        
+        # Save AI response
+        ai_message = ChatMessage(
+            session_id=session_id,
+            sender="ai",
+            content=analysis_result['message'],
+            visualizations=analysis_result.get('visualizations', []),
+            insights=analysis_result.get('insights', []),
+            policies=analysis_result.get('policies', [])
+        )
+        await policy_db.save_chat_message(ai_message)
+        
+        # Save recommendations if any
+        if analysis_result.get('policies'):
+            # Convert dict policies to PolicyRecommendation objects
+            from models import PolicyRecommendation, PolicyCategory
+            policy_objects = []
+            for policy_dict in analysis_result['policies']:
+                try:
+                    policy_obj = PolicyRecommendation(
+                        title=policy_dict.get('title', ''),
+                        description=policy_dict.get('description', ''),
+                        priority=policy_dict.get('priority', 'medium'),
+                        category=PolicyCategory(policy_dict.get('category', 'economic')),
+                        impact=policy_dict.get('impact', ''),
+                        implementation_steps=policy_dict.get('implementation_steps', [])
+                    )
+                    policy_objects.append(policy_obj)
+                except Exception as e:
+                    logger.error(f"Error creating policy object: {e}")
+            
+            if policy_objects:
+                await policy_db.save_policy_recommendations(policy_objects)
+        
+        return PolicyAnalysisResponse(
+            message=analysis_result['message'],
+            session_id=session_id,
+            visualizations=analysis_result.get('visualizations', []),
+            insights=analysis_result.get('insights', []),
+            policies=analysis_result.get('policies', []),
+            supporting_data_count=analysis_result.get('supporting_data_count', 0)
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error in policy analysis: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error analyzing policy: {str(e)}")
+
+@api_router.get("/sessions", response_model=List[ChatSession])
+async def get_chat_sessions():
+    try:
+        logger.info("📋 Fetching chat sessions...")
+        sessions = await policy_db.get_chat_sessions(limit=20)
+        logger.info(f"✓ Found {len(sessions)} sessions")
+        return sessions
+    except Exception as e:
+        logger.error(f"❌ Error fetching sessions: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching sessions")
+
+@api_router.get("/sessions/{session_id}", response_model=ChatSession)
+async def get_chat_session(session_id: str):
+    try:
+        logger.info(f"📋 Fetching session: {session_id}")
+        session = await policy_db.get_chat_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        logger.info(f"✓ Session found with {len(session.messages)} messages")
+        return session
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error fetching session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching session")
+
+@api_router.post("/scrape/trigger")
+async def trigger_scraping(background_tasks: BackgroundTasks):
+    """Deprecated - data is now from initial_data collection"""
+    return {
+        "message": "Scraping is deprecated. Using initial_data collection.",
+        "status": "not_needed"
+    }
+
+@api_router.get("/data/recent", response_model=List[ScrapedData])
+async def get_recent_data(limit: int = 50, category: Optional[str] = None):
+    try:
+        data = await policy_db.get_recent_scraped_data(limit=limit, category=category)
+        return data
+    except Exception as e:
+        logger.error(f"Error fetching recent data: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching data")
+
+@api_router.get("/data/search", response_model=List[ScrapedData])
+async def search_data(query: str, limit: int = 50):
+    try:
+        data = await policy_db.search_scraped_data(query, limit=limit)
+        return data
+    except Exception as e:
+        logger.error(f"Error searching data: {e}")
+        raise HTTPException(status_code=500, detail="Error searching data")
+
+@api_router.get("/stats")
+async def get_stats():
+    try:
+        stats = await policy_db.get_database_stats()
+        stats["scraping_status"] = "deprecated"
+        stats["last_scraping"] = last_scraping_time
+        
+        # Add initial_data stats
+        try:
+            initial_data_count = await policy_db.db.initial_data.count_documents({})
+            stats["initial_data_count"] = initial_data_count
+        except:
+            stats["initial_data_count"] = 0
+        
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        raise HTTPException(status_code=500, detail="Error getting statistics")
+
+@api_router.get("/report/{session_id}/{format}")
+async def generate_report(session_id: str, format: str):
+    try:
+        if format not in ['pdf', 'docx']:
+            raise HTTPException(status_code=400, detail="Format must be 'pdf' or 'docx'")
+        
+        session = await policy_db.get_chat_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if format == 'pdf':
+            buffer = report_generator.generate_pdf(session)
+            media_type = 'application/pdf'
+            filename = f"Laporan_Sensus_{session_id[:8]}.pdf"
+        else:
+            buffer = report_generator.generate_docx(session)
+            media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            filename = f"Laporan_Sensus_{session_id[:8]}.docx"
+        
+        return StreamingResponse(
+            buffer,
+            media_type=media_type,
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+
+# --- 9. REGISTER API ROUTER ---
 app.include_router(api_router)
+logger.info("✓ API routes registered at /api/*")
 
-# --- 11. REGISTER AUTH ROUTER ---
+# --- 10. REGISTER AUTH ROUTER ---
 try:
     from auth_routes import router as auth_router
     app.include_router(auth_router)
-    logger.info("✓ Auth routes registered successfully")
+    logger.info("✓ Auth routes registered at /api/auth/*")
 except ImportError as e:
     logger.error(f"✗ Failed to import auth routes: {e}")
+    logger.error("⚠️  Authentication will not work!")
+    
+    # Fallback auth endpoint for testing
+    @app.get("/api/auth/me")
+    async def fallback_auth_me():
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Auth module not loaded"}
+        )
 except Exception as e:
     logger.error(f"✗ Error registering auth routes: {e}")
 
-# --- 12. STATIC FILES & SPA FALLBACK (CRITICAL FIX) ---
+# --- 11. EXCEPTION HANDLERS ---
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    """Custom 404 handler - avoid intercepting frontend routes"""
+    path = request.url.path
+    
+    # If it's an API call, return JSON error
+    if path.startswith("/api/"):
+        logger.warning(f"404 API endpoint not found: {path}")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": f"API endpoint not found: {path}",
+                "available_endpoints": [
+                    "/api/health",
+                    "/api/chat",
+                    "/api/sessions",
+                    "/api/auth/me"
+                ]
+            }
+        )
+    
+    # For non-API paths, let them through (frontend will handle)
+    logger.info(f"Non-API path requested: {path} (frontend should handle)")
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Not found"}
+    )
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc):
+    """Custom 500 handler"""
+    logger.error(f"500 Internal Error at {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "path": request.url.path}
+    )
+
+# --- 12. STATIC FILES & SPA FALLBACK (FOR PRODUCTION) ---
 # Path ke frontend build
 FRONTEND_BUILD_PATH = BACKEND_DIR.parent / "frontend" / "build"
 
 # Check if frontend build exists
-if FRONTEND_BUILD_PATH.exists():
+if FRONTEND_BUILD_PATH.exists() and (FRONTEND_BUILD_PATH / "index.html").exists():
     logger.info(f"✓ Frontend build found at: {FRONTEND_BUILD_PATH}")
     
-    # Serve static files (JS, CSS, images, etc)
-    app.mount(
-        "/static",
-        StaticFiles(directory=str(FRONTEND_BUILD_PATH / "static")),
-        name="static"
-    )
+    # Serve static files (JS, CSS, images, etc) - MUST be before catch-all
+    static_path = FRONTEND_BUILD_PATH / "static"
+    if static_path.exists():
+        app.mount(
+            "/static",
+            StaticFiles(directory=str(static_path)),
+            name="static"
+        )
+        logger.info("✓ Static files mounted at /static")
     
-    # SPA Fallback - Serve index.html untuk semua routes yang tidak match
+    # SPA Fallback - Serve index.html untuk semua non-API routes
     @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
+    async def serve_spa(request: Request, full_path: str):
         """
         Catch-all route untuk serve React SPA.
         Semua client-side routes (/login, /dashboard, dll) akan serve index.html
         """
-        # Jangan intercept API routes
+        # Skip if it's an API route (already handled above)
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
         
-        # Serve file statis jika ada (favicon, manifest, dll)
-        file_path = FRONTEND_BUILD_PATH / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
+        # Serve specific files if they exist (favicon, manifest, robots.txt, etc)
+        if full_path and not full_path.startswith("_"):
+            file_path = FRONTEND_BUILD_PATH / full_path
+            if file_path.is_file():
+                return FileResponse(file_path)
         
-        # Fallback ke index.html untuk semua route lainnya
+        # Fallback ke index.html untuk semua SPA routes
         index_path = FRONTEND_BUILD_PATH / "index.html"
         if index_path.exists():
+            logger.info(f"Serving SPA for route: /{full_path}")
             return FileResponse(index_path)
         
-        raise HTTPException(status_code=404, detail="Frontend not found")
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+    
+    logger.info("✓ SPA fallback routing configured")
 else:
     logger.warning(f"✗ Frontend build NOT found at: {FRONTEND_BUILD_PATH}")
-    logger.warning("SPA routing will not work in production!")
+    logger.warning("⚠️  SPA routing will not work! Frontend must be built and deployed separately.")
 
-# --- 13. ROOT ENDPOINT (BEFORE SPA FALLBACK) ---
-@app.get("/", include_in_schema=True)
-async def root():
-    """Root endpoint - health check"""
-    return {
-        "message": "AI Policy & Insight Generator API", 
-        "version": "1.0.0",
-        "status": "online",
-        "endpoints": {
-            "api": "/api",
-            "health": "/api/health",
-            "auth": "/api/auth/me"
-        }
-    }
-
-# --- 14. LOG ALL ROUTES ON STARTUP ---
+# --- 13. LOG ALL ROUTES ON STARTUP ---
 @app.on_event("startup")
 async def log_routes():
     """Log all registered routes for debugging"""
-    logger.info("=" * 60)
+    logger.info("=" * 80)
     logger.info("REGISTERED ROUTES:")
-    logger.info("=" * 60)
+    logger.info("=" * 80)
+    
+    routes_by_path = {}
     for route in app.routes:
-        if hasattr(route, 'methods'):
-            methods = ', '.join(route.methods)
-            logger.info(f"{methods:10} {route.path}")
-    logger.info("=" * 60)
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            path = route.path
+            methods = ', '.join(sorted(route.methods))
+            if path not in routes_by_path:
+                routes_by_path[path] = []
+            routes_by_path[path].append(methods)
+    
+    for path in sorted(routes_by_path.keys()):
+        methods = ', '.join(routes_by_path[path])
+        logger.info(f"  {methods:20} {path}")
+    
+    logger.info("=" * 80)
+    logger.info(f"Total routes: {len(routes_by_path)}")
+    logger.info("=" * 80)
