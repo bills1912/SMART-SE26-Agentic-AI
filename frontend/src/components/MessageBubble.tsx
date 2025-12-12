@@ -309,6 +309,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         message={message}
+        sessionId={message.session_id!}
       />
     </div>
   );
