@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from models import VisualizationConfig
 from datetime import datetime
 import logging
+import uuid # Tambahkan library UUID untuk ID yang benar-benar unik
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,17 @@ COLORS = {
     ]
 }
 
-
 class VisualizationAgent:
     """Agent untuk generate visualisasi data - menghasilkan MULTIPLE visualisasi"""
     
     def __init__(self):
         pass
     
+    def _generate_unique_id(self, prefix: str) -> str:
+        """Helper untuk generate ID unik agar React me-remount komponen"""
+        # Menggunakan UUID hex agar dijamin unik dan tidak bocor state antar chat
+        return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
     def create_visualizations(
         self, 
         analysis: Dict[str, Any], 
@@ -34,8 +39,9 @@ class VisualizationAgent:
     ) -> List[VisualizationConfig]:
         """Generate MULTIPLE visualizations based on analysis type"""
         
-        data_type = aggregated_data.get('type', 'unknown')
+        # Pastikan list baru setiap kali fungsi dipanggil (stateless)
         visualizations = []
+        data_type = aggregated_data.get('type', 'unknown')
         
         try:
             if data_type == 'overview':
@@ -68,7 +74,7 @@ class VisualizationAgent:
             values = [p['total'] for p in top_provinces]
             
             viz1 = VisualizationConfig(
-                id=f"overview_provinces_{int(datetime.utcnow().timestamp())}",
+                id=self._generate_unique_id("overview_provinces"),
                 type="chart",
                 title="Top 10 Provinsi dengan Jumlah Usaha Terbanyak",
                 config={
@@ -93,7 +99,7 @@ class VisualizationAgent:
                 pie_data.append({"value": other_total, "name": "Sektor Lainnya", "itemStyle": {"color": "#95a5a6"}})
             
             viz2 = VisualizationConfig(
-                id=f"overview_sectors_{int(datetime.utcnow().timestamp())}",
+                id=self._generate_unique_id("overview_sectors"),
                 type="chart",
                 title="Distribusi Usaha per Sektor Ekonomi",
                 config={
@@ -113,7 +119,7 @@ class VisualizationAgent:
             values = [p['total'] for p in all_provinces[:20]]
             
             viz3 = VisualizationConfig(
-                id=f"overview_all_provinces_{int(datetime.utcnow().timestamp())}",
+                id=self._generate_unique_id("overview_all_provinces"),
                 type="chart",
                 title="Perbandingan Jumlah Usaha Antar Provinsi (Top 20)",
                 config={
@@ -140,7 +146,7 @@ class VisualizationAgent:
         
         # 1. Vertical Bar Chart
         viz1 = VisualizationConfig(
-            id=f"ranking_bar_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("ranking_bar"),
             type="chart",
             title="Top 10 Provinsi Berdasarkan Jumlah Usaha",
             config={
@@ -156,7 +162,7 @@ class VisualizationAgent:
         
         # 2. Horizontal Bar
         viz2 = VisualizationConfig(
-            id=f"ranking_hbar_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("ranking_hbar"),
             type="chart",
             title="Ranking Provinsi (Horizontal)",
             config={
@@ -182,7 +188,7 @@ class VisualizationAgent:
                 pie_data.append({"value": other_total, "name": "Provinsi Lainnya", "itemStyle": {"color": "#95a5a6"}})
             
             viz3 = VisualizationConfig(
-                id=f"ranking_pie_{int(datetime.utcnow().timestamp())}",
+                id=self._generate_unique_id("ranking_pie"),
                 type="chart",
                 title="Konsentrasi Usaha Top 3 Provinsi",
                 config={
@@ -207,7 +213,7 @@ class VisualizationAgent:
         
         # 1. Bar Chart
         viz1 = VisualizationConfig(
-            id=f"comparison_bar_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("comparison_bar"),
             type="chart",
             title="Perbandingan Jumlah Usaha Antar Provinsi",
             config={
@@ -223,7 +229,7 @@ class VisualizationAgent:
         
         # 2. Line Chart with Area
         viz2 = VisualizationConfig(
-            id=f"comparison_line_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("comparison_line"),
             type="chart",
             title="Tren Perbandingan Antar Provinsi",
             config={
@@ -254,7 +260,7 @@ class VisualizationAgent:
             pie_data.append({"value": other_total, "name": "Lainnya", "itemStyle": {"color": "#95a5a6"}})
         
         viz1 = VisualizationConfig(
-            id=f"distribution_pie_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("distribution_pie"),
             type="chart",
             title="Distribusi Usaha Per Sektor",
             config={
@@ -272,7 +278,7 @@ class VisualizationAgent:
         values = [item['total'] for item in distribution_detail[:15]]
         
         viz2 = VisualizationConfig(
-            id=f"distribution_bar_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("distribution_bar"),
             type="chart",
             title="Jumlah Usaha per Sektor (Bar Chart)",
             config={
@@ -307,7 +313,7 @@ class VisualizationAgent:
                 pie_data.append({"value": other_total, "name": "Lainnya", "itemStyle": {"color": "#95a5a6"}})
         
         viz1 = VisualizationConfig(
-            id=f"province_pie_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("province_pie"),
             type="chart",
             title=f"Distribusi Sektor di {provinsi}",
             config={
@@ -325,7 +331,7 @@ class VisualizationAgent:
         values = [s['total'] for s in all_sectors if s['total'] > 0]
         
         viz2 = VisualizationConfig(
-            id=f"province_bar_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("province_bar"),
             type="chart",
             title=f"Jumlah Usaha per Sektor di {provinsi}",
             config={
@@ -359,7 +365,7 @@ class VisualizationAgent:
         values = [p['total'] for p in all_provinces[:15]]
         
         viz1 = VisualizationConfig(
-            id=f"sector_bar_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("sector_bar"),
             type="chart",
             title=f"Distribusi {sector_title} per Provinsi",
             config={
@@ -381,7 +387,7 @@ class VisualizationAgent:
             pie_data.append({"value": other_total, "name": "Provinsi Lainnya", "itemStyle": {"color": "#95a5a6"}})
         
         viz2 = VisualizationConfig(
-            id=f"sector_pie_{int(datetime.utcnow().timestamp())}",
+            id=self._generate_unique_id("sector_pie"),
             type="chart",
             title=f"Proporsi {sector_title} Antar Provinsi",
             config={
