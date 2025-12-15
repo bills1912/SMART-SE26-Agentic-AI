@@ -2,13 +2,15 @@ from typing import Dict, Any, List
 from models import VisualizationConfig
 from datetime import datetime
 import logging
-import uuid # Tambahkan library UUID untuk ID yang benar-benar unik
+import uuid
+import math
 
 logger = logging.getLogger(__name__)
 
 # Color palettes for visualizations
 COLORS = {
     'primary': ['#e74c3c', '#ff6b35', '#ff8c42', '#ffad73', '#ffd4a3'],
+    'heatmap': ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'],
     'gradient': [
         {'offset': 0, 'color': '#e74c3c'},
         {'offset': 1, 'color': '#ff8c42'}
@@ -22,14 +24,13 @@ COLORS = {
 }
 
 class VisualizationAgent:
-    """Agent untuk generate visualisasi data - menghasilkan MULTIPLE visualisasi"""
+    """Agent untuk generate visualisasi data - Supports Basic & Advanced Charts"""
     
     def __init__(self):
         pass
     
     def _generate_unique_id(self, prefix: str) -> str:
         """Helper untuk generate ID unik agar React me-remount komponen"""
-        # Menggunakan UUID hex agar dijamin unik dan tidak bocor state antar chat
         return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
     def create_visualizations(
@@ -39,23 +40,37 @@ class VisualizationAgent:
     ) -> List[VisualizationConfig]:
         """Generate MULTIPLE visualizations based on analysis type"""
         
-        # Pastikan list baru setiap kali fungsi dipanggil (stateless)
         visualizations = []
         data_type = aggregated_data.get('type', 'unknown')
         
         try:
+            # --- 1. BASIC VISUALIZATIONS (LOGIKA LAMA TETAP DIPERTAHANKAN) ---
             if data_type == 'overview':
-                visualizations = self._create_overview_viz(analysis, aggregated_data)
+                visualizations.extend(self._create_overview_viz(analysis, aggregated_data))
             elif data_type == 'ranking':
-                visualizations = self._create_ranking_viz(analysis, aggregated_data)
+                visualizations.extend(self._create_ranking_viz(analysis, aggregated_data))
             elif data_type == 'comparison':
-                visualizations = self._create_comparison_viz(analysis, aggregated_data)
+                visualizations.extend(self._create_comparison_viz(analysis, aggregated_data))
             elif data_type == 'distribution':
-                visualizations = self._create_distribution_viz(analysis, aggregated_data)
+                visualizations.extend(self._create_distribution_viz(analysis, aggregated_data))
             elif data_type == 'province_detail':
-                visualizations = self._create_province_detail_viz(analysis, aggregated_data)
+                visualizations.extend(self._create_province_detail_viz(analysis, aggregated_data))
             elif data_type == 'sector_analysis':
-                visualizations = self._create_sector_analysis_viz(analysis, aggregated_data)
+                visualizations.extend(self._create_sector_analysis_viz(analysis, aggregated_data))
+            
+            # --- 2. ADVANCED VISUALIZATIONS (FITUR BARU) ---
+            
+            # Tambahkan Treemap untuk Overview/Distribution (Lebih baik dari Pie Chart untuk data banyak)
+            if data_type in ['overview', 'distribution'] and 'distribution_detail' in analysis:
+                visualizations.append(self._create_treemap_viz(analysis))
+
+            # Tambahkan Heatmap jika data Comparison/Overview (Melihat pola sektor vs provinsi)
+            if data_type in ['overview', 'comparison'] and 'matrix_data' in analysis:
+                 visualizations.append(self._create_heatmap_viz(analysis))
+
+            # Tambahkan Radar Chart untuk Province Detail (Profil vs Nasional/Avg)
+            if data_type == 'province_detail' and 'lq_data' in analysis:
+                visualizations.append(self._create_radar_viz(analysis))
             
             logger.info(f"Created {len(visualizations)} visualizations for type: {data_type}")
         except Exception as e:
@@ -63,8 +78,12 @@ class VisualizationAgent:
         
         return visualizations
     
+    # ==========================================
+    # KODE LAMA (DIJAGA AGAR TIDAK HILANG)
+    # ==========================================
+    
     def _create_overview_viz(self, analysis: Dict[str, Any], data: Dict[str, Any]) -> List[VisualizationConfig]:
-        """Create comprehensive overview visualizations - 3-4 charts"""
+        """Create comprehensive overview visualizations"""
         visualizations = []
         
         # 1. Top 10 Provinces Bar Chart
@@ -401,3 +420,121 @@ class VisualizationAgent:
         visualizations.append(viz2)
         
         return visualizations
+
+    # ==========================================
+    # KODE BARU (ADVANCED CHARTS)
+    # ==========================================
+
+    def _create_treemap_viz(self, analysis: Dict[str, Any]) -> VisualizationConfig:
+        """Create Treemap Visualization for hierarchical view of sectors"""
+        data = analysis.get('distribution_detail', [])
+        
+        # Format data for ECharts Treemap
+        tree_data = []
+        for item in data:
+            tree_data.append({
+                "name": item.get('short_name', item.get('name', 'Unknown')),
+                "value": item.get('total', 0),
+                "itemStyle": {"color": COLORS['sectors'][len(tree_data) % len(COLORS['sectors'])]}
+            })
+            
+        return VisualizationConfig(
+            id=self._generate_unique_id("advanced_treemap"),
+            type="chart",
+            title="Peta Komposisi Sektor Ekonomi (Treemap)",
+            config={
+                "title": {"text": "Komposisi Sektor Ekonomi", "left": "center", "textStyle": {"color": "#e74c3c", "fontSize": 14}},
+                "tooltip": {"formatter": "{b}: {c} usaha"},
+                "series": [{
+                    "type": "treemap",
+                    "data": tree_data,
+                    "breadcrumb": {"show": False},
+                    "label": {"show": True, "formatter": "{b}\n{c}"},
+                    "itemStyle": {"borderColor": "#fff"}
+                }]
+            },
+            data={"source": "Sensus Ekonomi 2016"}
+        )
+
+    def _create_heatmap_viz(self, analysis: Dict[str, Any]) -> VisualizationConfig:
+        """Create Heatmap: Provinces (Y) vs Top Sectors (X)"""
+        matrix = analysis.get('matrix_data', {})
+        provinces = matrix.get('provinces', [])
+        sectors = matrix.get('sectors', [])
+        values = matrix.get('values', []) # Format: [[sector_idx, prov_idx, value], ...]
+        
+        return VisualizationConfig(
+            id=self._generate_unique_id("advanced_heatmap"),
+            type="chart",
+            title="Peta Intensitas Usaha (Heatmap)",
+            config={
+                "title": {"text": "Intensitas Usaha: Provinsi vs Sektor", "left": "center", "textStyle": {"fontSize": 14}},
+                "tooltip": {"position": "top"},
+                "grid": {"height": "70%", "top": "10%"},
+                "xAxis": {"type": "category", "data": sectors, "splitArea": {"show": True}, "axisLabel": {"rotate": 45, "interval": 0, "fontSize": 9}},
+                "yAxis": {"type": "category", "data": provinces, "splitArea": {"show": True}, "axisLabel": {"fontSize": 10}},
+                "visualMap": {
+                    "min": 0,
+                    "max": max([v[2] for v in values]) if values else 1000,
+                    "calculable": True,
+                    "orient": "horizontal",
+                    "left": "center",
+                    "bottom": "0%",
+                    "inRange": {"color": COLORS['heatmap']}
+                },
+                "series": [{
+                    "name": "Jumlah Usaha",
+                    "type": "heatmap",
+                    "data": values,
+                    "label": {"show": False},
+                    "emphasis": {"itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0, 0, 0, 0.5)"}}
+                }]
+            },
+            data={"source": "Sensus Ekonomi 2016"}
+        )
+
+    def _create_radar_viz(self, analysis: Dict[str, Any]) -> VisualizationConfig:
+        """Create Radar Chart: Province Specialization vs National Avg"""
+        lq_data = analysis.get('lq_data', [])
+        
+        indicators = []
+        lq_values = []
+        
+        # Ambil top 6 sektor berdasarkan LQ tertinggi
+        sorted_lq = sorted(lq_data, key=lambda x: x['lq'], reverse=True)[:6]
+        
+        max_val = 0
+        for item in sorted_lq:
+            val = item['lq']
+            if val > max_val: max_val = val
+            indicators.append({"name": item['short_name'], "max": math.ceil(val) + 1})
+            lq_values.append(val)
+            
+        return VisualizationConfig(
+            id=self._generate_unique_id("advanced_radar"),
+            type="chart",
+            title="Profil Keunggulan Daerah (Location Quotient)",
+            config={
+                "title": {"text": "Keunggulan Komparatif (LQ > 1 = Unggul)", "left": "center", "textStyle": {"fontSize": 14, "color": "#e74c3c"}},
+                "tooltip": {},
+                "radar": {
+                    "indicator": indicators,
+                    "shape": "circle",
+                    "splitNumber": 5,
+                    "axisName": {"color": "#333"}
+                },
+                "series": [{
+                    "name": "Location Quotient",
+                    "type": "radar",
+                    "data": [
+                        {
+                            "value": lq_values,
+                            "name": analysis.get('provinsi', 'Provinsi'),
+                            "areaStyle": {"color": "rgba(231, 76, 60, 0.5)"},
+                            "lineStyle": {"color": "#e74c3c"}
+                        }
+                    ]
+                }]
+            },
+            data={"source": "Sensus Ekonomi 2016"}
+        )
