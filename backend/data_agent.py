@@ -110,51 +110,88 @@ class DataRetrievalAgent:
         return total
     
     async def understand_query(self, query: str) -> QueryIntent:
-        """Enhanced query understanding with better intent detection"""
+        """
+        Improved Logic:
+        1. Cek Negative Constraints (Apa yang dilarang user)
+        2. Cek Specific Intent dulu (Ranking, Comparison, Distribution)
+        3. Baru cek General Intent (Analisis/Overview) dengan konteks
+        """
         query_lower = query.lower()
+        intent = QueryIntent(intent_type='overview') # Default intent type
+
+        # 1. DETEKSI NEGATIVE CONSTRAINTS (Larangan)
+        exclude_province_viz = any(phrase in query_lower for phrase in [
+            'jangan provinsi', 'no province', 'tidak usah provinsi', 'tanpa provinsi', 
+            'jangan ada provinsi', 'jangan tampilkan provinsi', 'exclude province', 
+            'jangan sampai ada analisis provinsi', 'jangan sampai ada provinsi'
+        ])
         
-        intent = QueryIntent(intent_type='distribution')
+        exclude_sector_viz = any(phrase in query_lower for phrase in [
+            'jangan sektor', 'no sector', 'tidak usah sektor', 'tanpa sektor',
+            'jangan ada sektor'
+        ])
         
-        # Enhanced intent detection - check for overview/analysis first
-        if any(word in query_lower for word in ['analisis', 'analyze', 'analisa', 'overview', 'keseluruhan', 'semua', 'lengkap', 'detail', 'mendetail', 'gambaran']):
-            intent.intent_type = 'overview'
-        # Check for comparison
-        elif any(word in query_lower for word in ['bandingkan', 'compare', 'versus', 'vs', 'perbandingan', 'beda', 'dibanding']):
-            intent.intent_type = 'comparison'
-        # Check for ranking
-        elif any(word in query_lower for word in ['ranking', 'urut', 'tertinggi', 'terendah', 'terbanyak', 'terbesar', 'top', 'paling', 'mana yang', 'terkecil', 'tersedikit']):
-            intent.intent_type = 'ranking'
-        # Check for trend
-        elif any(word in query_lower for word in ['tren', 'trend', 'perkembangan', 'perubahan']):
-            intent.intent_type = 'trend'
-        # Check for distribution
-        elif any(word in query_lower for word in ['distribusi', 'sebaran', 'persebaran', 'komposisi', 'bagaimana', 'proporsi']):
-            intent.intent_type = 'distribution'
-        
-        # ENHANCED: Detect if asking for specific value (e.g., "berapa jumlah")
-        if any(word in query_lower for word in ['berapa', 'jumlah', 'total', 'banyak']):
-            # If asking about specific province + sector → comparison
-            provinces = self._extract_provinces(query)
-            sectors = self._extract_sectors(query)
-            
-            if provinces and len(provinces) == 1 and sectors:
-                intent.intent_type = 'province_detail'  # Single province with sector analysis
-            elif provinces and len(provinces) == 1:
-                intent.intent_type = 'province_detail'  # Province overview
-            elif provinces and len(provinces) > 1:
-                intent.intent_type = 'comparison'  # Multiple provinces
-            elif sectors and not provinces:
-                intent.intent_type = 'sector_analysis'  # Sector analysis across all provinces
-        
-        # Extract entities
+        # Ekstrak entitas
         intent.provinces = self._extract_provinces(query)
         intent.sectors = self._extract_sectors(query)
+
+        # Cek topik dominan (Sektor vs Provinsi)
+        is_sector_topic = len(intent.sectors) > 0 or any(w in query_lower for w in ['sektor', 'lapangan usaha', 'bidang', 'industri', 'kbli'])
+        is_province_topic = len(intent.provinces) > 0 or any(w in query_lower for w in ['provinsi', 'wilayah', 'daerah', 'kota', 'lokasi'])
+
+        # 2. LOGIKA PENENTUAN INTENT (PRIORITAS DIUBAH)
         
-        # ENHANCEMENT: If asking "mana yang..." without provinces → ranking
-        if 'mana yang' in query_lower and not intent.provinces:
+        # A. Comparison (Paling spesifik)
+        if any(word in query_lower for word in ['bandingkan', 'compare', 'vs', 'versus', 'perbandingan', 'beda', 'dibanding']):
+            intent.intent_type = 'comparison'
+            
+        # B. Ranking (Urutan)
+        elif any(word in query_lower for word in ['ranking', 'urut', 'tertinggi', 'terendah', 'top', 'paling', 'mana yang', 'terbanyak', 'tersedikit', 'terbesar', 'terkecil']):
             intent.intent_type = 'ranking'
+            
+        # C. Distribution/Proporsi (Fokus ke komposisi)
+        elif any(word in query_lower for word in ['distribusi', 'sebaran', 'persebaran', 'komposisi', 'proporsi', 'persentase', 'porsi', 'bagaimana']):
+            intent.intent_type = 'distribution'
+            
+        # D. Trend
+        elif any(word in query_lower for word in ['tren', 'trend', 'perkembangan', 'pertumbuhan', 'perubahan']):
+            intent.intent_type = 'trend'
+
+        # E. Specific Value Check (Berapa jumlah...)
+        elif any(word in query_lower for word in ['berapa', 'jumlah', 'total', 'banyak']):
+            # Logic asli dipertahankan tapi diperkuat
+            if intent.provinces and len(intent.provinces) == 1 and intent.sectors:
+                intent.intent_type = 'province_detail'
+            elif intent.provinces and len(intent.provinces) == 1:
+                intent.intent_type = 'province_detail'
+            elif intent.provinces and len(intent.provinces) > 1:
+                intent.intent_type = 'comparison'
+            elif intent.sectors and not intent.provinces:
+                intent.intent_type = 'sector_analysis'
+            
+        # F. General Analysis / Overview (Catch-all terakhir)
+        elif any(word in query_lower for word in ['analisis', 'analyze', 'analisa', 'data', 'info', 'detail', 'overview', 'gambaran', 'keseluruhan', 'lengkap', 'mendetail']):
+            if is_sector_topic and not is_province_topic:
+                # User minta "Analisis Sektor" -> Arahkan ke distribution
+                intent.intent_type = 'distribution' 
+            elif is_province_topic and not is_sector_topic:
+                 # User minta "Analisis Provinsi X"
+                intent.intent_type = 'province_detail' if len(intent.provinces) == 1 else 'comparison'
+            else:
+                intent.intent_type = 'overview'
         
-        logger.info(f"Enhanced intent: type={intent.intent_type}, provinces={intent.provinces}, sectors={intent.sectors}")
+        # 3. PENYESUAIAN AKHIR BERDASARKAN LARANGAN (NEGATIVE CONSTRAINT)
+        if exclude_province_viz:
+            # Jika user melarang provinsi, paksa intent ke arah sektor
+            if intent.intent_type == 'overview':
+                intent.intent_type = 'distribution' # Paksa ke Pie Chart Sektor
+            elif intent.intent_type == 'ranking':
+                # Pastikan ranking sektor, bukan ranking provinsi
+                if not intent.sectors:
+                     # Jika tidak ada sektor spesifik, anggap mau ranking SEMUA sektor
+                     intent.intent_type = 'distribution' 
+        
+        logger.info(f"Enhanced intent: type={intent.intent_type}, provinces={intent.provinces}, sectors={intent.sectors}, exclude_province={exclude_province_viz}")
         
         return intent
     
@@ -389,7 +426,11 @@ class DataRetrievalAgent:
             'sectors': sector_totals,
             'grand_total': grand_total,
             'provinces_count': len(provinces_data),
-            'sectors_count': len(sector_totals)
+            'sectors_count': len(sector_totals),
+            # Helper keys for visualization agent
+            'top_provinces': provinces_data[:10],
+            'all_provinces': provinces_data,
+            'top_sectors': sorted([{'code': k, **v} for k,v in sector_totals.items()], key=lambda x: x['total'], reverse=True)
         }
     
     def _aggregate_ranking(self, data: List[Dict[str, Any]], intent: QueryIntent) -> Dict[str, Any]:
@@ -469,10 +510,14 @@ class DataRetrievalAgent:
                         'short_name': KBLI_SHORT_NAMES.get(sector_code, sector_code)
                     }
         
+        # Helper for visualization agent
+        sorted_dist = sorted(distribution.values(), key=lambda x: x['total'], reverse=True)
+
         return {
             'type': 'distribution',
             'data': distribution,
-            'provinces': intent.provinces if intent.provinces else 'all'
+            'provinces': intent.provinces if intent.provinces else 'all',
+            'distribution_detail': sorted_dist 
         }
     
     def _aggregate_province_detail(self, data: List[Dict[str, Any]], intent: QueryIntent) -> Dict[str, Any]:
@@ -537,7 +582,8 @@ class DataRetrievalAgent:
             'data': province_data,
             'sectors': sector_codes,
             'sector_names': sector_names,
-            'total': grand_total
+            'total': grand_total,
+            'all_provinces': province_data # Helper key for viz
         }
     
     def _aggregate_trend(self, data: List[Dict[str, Any]], intent: QueryIntent) -> Dict[str, Any]:
