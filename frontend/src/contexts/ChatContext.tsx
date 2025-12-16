@@ -46,10 +46,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       const chatSessions = await apiService.getSessions();
-      setSessions(chatSessions);
       
-      // Always start with a new empty chat
-      createNewChat();
+      // FIX: Normalisasi ID menjadi String saat load awal
+      const normalizedSessions = chatSessions.map(s => ({
+        ...s,
+        id: String(s.id)
+      }));
+      
+      setSessions(normalizedSessions);
+      
+      // Always start with a new empty chat if no session selected
+      if (!currentSession) {
+        createNewChat();
+      }
     } catch (error) {
       console.error('Failed to load chat history:', error);
       createNewChat();
@@ -59,6 +68,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   };
 
   const createNewChat = () => {
+    // FIX: Pastikan loading dimatikan saat reset ke chat baru
+    setIsLoading(false);
+    
     const newSession: ChatSession = {
       id: '',
       title: 'Analisis Sensus Baru',
@@ -74,8 +86,25 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const switchToSession = async (sessionId: string) => {
     try {
       setIsLoading(true);
+      
+      // FIX: Cek apakah session sudah ada di cache (sessions array) untuk fast switching
+      // Konversi ke string untuk perbandingan aman
+      const existingSession = sessions.find(s => String(s.id) === String(sessionId));
+      if (existingSession && existingSession.messages && existingSession.messages.length > 0) {
+         setCurrentSession(existingSession);
+         // Tetap fetch background untuk update terbaru, tapi UI sudah jalan duluan
+      }
+
       const session = await apiService.getSession(sessionId);
-      setCurrentSession(session);
+      
+      // FIX UTAMA: Konversi ID dari API (number) ke String secara paksa
+      // Ini mengatasi bug "Infinite Loading" karena ketidakcocokan tipe data
+      const normalizedSession = {
+        ...session,
+        id: String(session.id)
+      };
+
+      setCurrentSession(normalizedSession);
     } catch (error) {
       console.error('Failed to switch to session:', error);
     } finally {
@@ -96,7 +125,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         
         // Update session ID if it was empty (new session)
         if (!prevSession.id && message.session_id) {
-          updatedSession.id = message.session_id;
+          updatedSession.id = String(message.session_id); // FIX: Ensure String
           updatedSession.title = generateSessionTitle(message.content);
         }
         
@@ -105,10 +134,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       
       // Update sessions list
       setSessions(prevSessions => {
-        const sessionId = currentSession.id || message.session_id;
+        // FIX: Pastikan ID string
+        const sessionId = currentSession.id ? String(currentSession.id) : (message.session_id ? String(message.session_id) : '');
         if (!sessionId) return prevSessions;
         
-        const existingIndex = prevSessions.findIndex(s => s.id === sessionId);
+        const existingIndex = prevSessions.findIndex(s => String(s.id) === sessionId);
         
         const updatedSessionForList = {
           ...currentSession,
@@ -156,7 +186,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         if (!currentSession.id) return prevSessions;
         
         return prevSessions.map(session => {
-          if (session.id === currentSession.id) {
+          if (String(session.id) === String(currentSession.id)) { // FIX: String compare
             return {
               ...session,
               messages: session.messages.map(msg =>
@@ -239,11 +269,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       await apiService.deleteSession(sessionId);
       
-      // Update state lokal
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      // Update state lokal - Gunakan String compare
+      setSessions(prev => prev.filter(s => String(s.id) !== String(sessionId)));
       
       // Jika sesi yang dihapus adalah sesi aktif, buat chat baru
-      if (currentSession?.id === sessionId) {
+      if (currentSession && String(currentSession.id) === String(sessionId)) {
         createNewChat();
       }
     } catch (error) {
@@ -256,9 +286,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       await apiService.deleteSessions(sessionIds);
       
-      setSessions(prev => prev.filter(s => !sessionIds.includes(s.id)));
+      // Konversi sessionIds ke string semua untuk filtering
+      const stringIds = sessionIds.map(id => String(id));
+      setSessions(prev => prev.filter(s => !stringIds.includes(String(s.id))));
       
-      if (currentSession && sessionIds.includes(currentSession.id)) {
+      if (currentSession && stringIds.includes(String(currentSession.id))) {
         createNewChat();
       }
     } catch (error) {
