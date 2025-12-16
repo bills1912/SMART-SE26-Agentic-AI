@@ -269,6 +269,7 @@ class PolicyDatabase:
         except Exception as e:
             logger.error(f"Error getting database stats: {e}")
             return {}
+        
 
     async def close(self):
         """Close database connection"""
@@ -277,6 +278,35 @@ class PolicyDatabase:
             self._connected = False
             logger.info("Database connection closed")
 
+    async def delete_chat_session(self, session_id: str) -> bool:
+        """Delete a single chat session"""
+        try:
+            result = await self.db.chat_sessions.delete_one({"id": session_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"Error deleting session {session_id}: {e}")
+            return False
+
+    async def delete_chat_sessions(self, session_ids: List[str]) -> int:
+        """Delete multiple chat sessions (Bulk)"""
+        try:
+            result = await self.db.chat_sessions.delete_many({
+                "id": {"$in": session_ids}
+            })
+            return result.deleted_count
+        except Exception as e:
+            logger.error(f"Error bulk deleting sessions: {e}")
+            return 0
+
+    async def delete_all_chat_sessions(self) -> int:
+        """Delete ALL chat sessions"""
+        try:
+            result = await self.db.chat_sessions.delete_many({})
+            return result.deleted_count
+        except Exception as e:
+            logger.error(f"Error deleting all sessions: {e}")
+            return 0
+        
 # Dependency for FastAPI routes
 _db_instance = None
 

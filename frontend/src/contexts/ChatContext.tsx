@@ -13,6 +13,9 @@ interface ChatContextType {
   loadChatHistory: () => Promise<void>;
   addMessageToCurrentSession: (message: ChatMessage) => void;
   updateMessageInCurrentSession: (messageId: string, newContent: string) => void;
+  deleteSession: (sessionId: string) => Promise<void>;
+  deleteMultipleSessions: (sessionIds: string[]) => Promise<void>;
+  deleteAllSessions: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -232,6 +235,49 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     URL.revokeObjectURL(url);
   };
 
+  const deleteSession = async (sessionId: string) => {
+    try {
+      await apiService.deleteSession(sessionId);
+      
+      // Update state lokal
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      
+      // Jika sesi yang dihapus adalah sesi aktif, buat chat baru
+      if (currentSession?.id === sessionId) {
+        createNewChat();
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      throw error;
+    }
+  };
+
+  const deleteMultipleSessions = async (sessionIds: string[]) => {
+    try {
+      await apiService.deleteSessions(sessionIds);
+      
+      setSessions(prev => prev.filter(s => !sessionIds.includes(s.id)));
+      
+      if (currentSession && sessionIds.includes(currentSession.id)) {
+        createNewChat();
+      }
+    } catch (error) {
+      console.error('Failed to delete sessions:', error);
+      throw error;
+    }
+  };
+
+  const deleteAllSessions = async () => {
+    try {
+      await apiService.deleteAllSessions();
+      setSessions([]);
+      createNewChat();
+    } catch (error) {
+      console.error('Failed to delete all sessions:', error);
+      throw error;
+    }
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -244,7 +290,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         exportAllChats,
         loadChatHistory,
         addMessageToCurrentSession,
-        updateMessageInCurrentSession
+        updateMessageInCurrentSession,
+        deleteSession,
+        deleteMultipleSessions,
+        deleteAllSessions,
       }}
     >
       {children}

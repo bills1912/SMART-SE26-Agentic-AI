@@ -58,7 +58,7 @@ const ChatInterface: React.FC = () => {
   );
 
   // Check if this is a new empty chat
-  const isNewChat = !sessionId || (currentSession?.messages?.length === 0);
+  const isNewChat = !sessionId;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
