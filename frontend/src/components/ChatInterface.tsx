@@ -25,7 +25,7 @@ const ChatInterface: React.FC = () => {
   } = useChat();
 
   // 2. Init Hooks Router
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { sessionId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -58,7 +58,7 @@ const ChatInterface: React.FC = () => {
   );
 
   // Check if this is a new empty chat
-  const isNewChat = currentSession && realMessages.length === 0;
+  const isNewChat = !sessionId || (currentSession?.messages?.length === 0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

@@ -159,15 +159,15 @@ class PolicyDatabase:
             raise
 
     async def get_chat_session(self, session_id: str) -> Optional[ChatSession]:
-        """Get chat session by ID"""
+        """Get chat session by ID (Fixed for Embedded Messages)"""
         try:
+            # Mengambil session langsung. Karena kita mengubah strategi penyimpanan
+            # menjadi 'Embedded', pesan sudah ada di dalam dokumen ini.
             session_data = await self.db.chat_sessions.find_one({"id": session_id})
+            
             if session_data:
-                messages_cursor = self.db.chat_messages.find({"session_id": session_id}).sort("timestamp", 1)
-                messages_data = await messages_cursor.to_list(length=1000)
-                messages = [ChatMessage(**msg) for msg in messages_data]
-                
-                session_data["messages"] = messages
+                # Tidak perlu lagi query ke chat_messages terpisah
+                # Pydantic akan otomatis memvalidasi struktur data
                 return ChatSession(**session_data)
             return None
         except Exception as e:
@@ -175,14 +175,34 @@ class PolicyDatabase:
             return None
 
     async def save_chat_message(self, message: ChatMessage) -> bool:
-        """Save a chat message"""
+        """
+        Save a chat message DIRECTLY into the session document (Embedded Pattern).
+        Ini memperbaiki bug pesan hilang dan reload reset.
+        """
         try:
-            await self.db.chat_messages.insert_one(message.dict())
-            await self.db.chat_sessions.update_one(
+            # 1. Konversi pesan ke dictionary
+            message_dict = message.dict()
+            
+            # 2. Pastikan timestamp dalam format string ISO agar MongoDB bisa menyimpannya dengan aman
+            if 'timestamp' in message_dict and isinstance(message_dict['timestamp'], datetime):
+                message_dict['timestamp'] = message_dict['timestamp'].isoformat()
+            
+            # 3. Gunakan $push untuk memasukkan pesan ke dalam array 'messages' di dokumen session
+            result = await self.db.chat_sessions.update_one(
                 {"id": message.session_id},
-                {"$set": {"updated_at": datetime.utcnow()}}
+                {
+                    "$push": {"messages": message_dict},     # Masukkan pesan ke array
+                    "$set": {"updated_at": datetime.utcnow()} # Update waktu terakhir
+                }
             )
-            return True
+            
+            # Cek apakah update berhasil
+            if result.modified_count > 0:
+                return True
+            else:
+                logger.warning(f"Session {message.session_id} not found when saving message.")
+                return False
+                
         except Exception as e:
             logger.error(f"Error saving chat message: {e}")
             return False
