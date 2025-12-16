@@ -59,17 +59,15 @@ const ChatInterface: React.FC = () => {
     (msg) => !msg.id?.startsWith("welcome_")
   );
 
+  // --- LOGIC PERBAIKAN LOADING & STATUS ---
+  
   // Check if this is a new empty chat
-  // IMPROVISASI: Definisi isSessionLoading diperketat agar tidak stuck saat null
+  // Kita anggap "New Chat" jika TIDAK ada sessionId di URL.
+  const isNewChat = !sessionId;
+
+  // Kita anggap "Loading Session" jika ada ID di URL, TAPI context belum memuat ID tersebut
   const isSessionLoading =
     !!sessionId && (!currentSession || currentSession.id !== sessionId);
-
-  const isNewChat =
-    !sessionId ||
-    (!isSessionLoading &&
-      currentSession?.messages &&
-      currentSession.messages.filter((m) => !m.id?.startsWith("welcome"))
-        .length === 0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -82,15 +80,15 @@ const ChatInterface: React.FC = () => {
   };
 
   // IMPROVISASI: Safety Timeout Effect
-  // Jika loading sesi memakan waktu lebih dari 8 detik, aktifkan mode "Long Loading"
+  // Jika loading sesi memakan waktu lebih dari 5 detik, aktifkan mode "Long Loading"
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     if (isSessionLoading) {
-      setIsLongLoading(false); // Reset dulu
+      setIsLongLoading(false); // Reset saat mulai loading
       timeoutId = setTimeout(() => {
         setIsLongLoading(true); // Trigger UI bantuan jika stuck
-      }, 8000); // 8 detik toleransi
+      }, 5000); // Dipercepat ke 5 detik agar user cepat sadar
     } else {
       setIsLongLoading(false);
     }
@@ -113,28 +111,40 @@ const ChatInterface: React.FC = () => {
     }
   }, [realMessages.length]);
 
+  // --- CORE FIX: PERBAIKAN LOGIKA SWITCH SESSION & NEW CHAT ---
+
+  // FIX 1: Handle Perubahan Sesi (History Click)
+  // Dipisahkan agar tidak konflik dengan update context
   useEffect(() => {
-    // Jika ada sessionId di URL, muat sesinya
     if (sessionId) {
-      // Cek apakah kita sudah di sesi yang benar untuk menghindari loop
+      // Hanya switch jika ID di URL berbeda dengan yang aktif sekarang
       if (currentSession?.id !== sessionId) {
-        // PERBAIKAN: Menghapus .catch() karena switchToSession mengembalikan void
         try {
+          // Kita panggil fungsi switch. 
+          // Karena void, kita tidak pakai .catch atau await
           switchToSession(sessionId);
         } catch (error) {
-          console.error("Error switching session:", error);
-        }
-      }
-    } else {
-      // Jika URL adalah /dashboard (tanpa ID) dan kita sedang punya sesi aktif yg punya ID,
-      // Jangan reset, tapi biarkan user membuat chat baru jika mereka mau.
-      if (location.pathname === "/dashboard") {
-        if (currentSession?.id) {
-          createNewChat();
+          console.error("Error triggering switch session:", error);
         }
       }
     }
-  }, [sessionId, location.pathname, currentSession?.id]); 
+    // DEPENDENCY PENTING: Hanya [sessionId]. 
+    // Jangan masukkan [currentSession] di sini untuk mencegah infinite loop.
+  }, [sessionId]); 
+
+  // FIX 2: Handle New Chat (Dashboard Navigation)
+  // Dipisahkan ke useEffect sendiri
+  useEffect(() => {
+    // Jika kita di dashboard (tidak ada sessionId) TAPI masih ada sesi nyangkut di memori
+    if (!sessionId && location.pathname.includes("/dashboard")) {
+      if (currentSession?.id) {
+        createNewChat();
+        setInputMessage(""); // Pastikan input bersih
+      }
+    }
+  }, [sessionId, location.pathname]); 
+
+  // --- END CORE FIX ---
 
   useEffect(() => {
     checkBackendStatus();
@@ -255,11 +265,14 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading || !currentSession) return;
+    // Diperbolehkan kirim pesan meski currentSession null (untuk trigger new chat otomatis)
+    if (!inputMessage.trim() || isLoading) return;
+
+    const activeSessionId = currentSession?.id || "";
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
-      session_id: currentSession.id || "",
+      session_id: activeSessionId,
       sender: "user",
       content: inputMessage.trim(),
       timestamp: new Date(),
@@ -278,9 +291,11 @@ const ChatInterface: React.FC = () => {
 
       const response = await apiService.sendMessage(
         originalMessage,
-        currentSession.id
+        activeSessionId
       );
 
+      // Jika kita berada di mode New Chat (tidak ada ID di URL),
+      // maka setelah kirim pesan pertama, kita harus update URL ke session ID baru
       if (!sessionId && response.session_id) {
         navigate(`/c/${response.session_id}`, { replace: true });
       }
@@ -314,7 +329,7 @@ const ChatInterface: React.FC = () => {
 
       const errorResponse: ChatMessage = {
         id: "error_" + Date.now(),
-        session_id: currentSession.id || "",
+        session_id: activeSessionId,
         sender: "ai",
         content:
           "I apologize, but I encountered an issue while analyzing your policy question. This could be due to high demand or temporary service issues. Please try again in a moment.",
@@ -351,7 +366,7 @@ const ChatInterface: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300 font-medium">
             Mengambil riwayat percakapan...
           </p>
-          {/* Tampilkan pesan tambahan jika loading > 8 detik */}
+          {/* Tampilkan pesan tambahan jika loading > 5 detik */}
           {isLongLoading && (
             <p className="text-sm text-gray-400 mt-2 animate-pulse">
               Sedikit lebih lama dari biasanya...
