@@ -37,9 +37,6 @@ from database import PolicyDatabase
 from ai_analyzer import PolicyAIAnalyzer
 from report_generator import ReportGenerator
 
-class BulkDeleteRequest(BaseModel):
-    session_ids: List[str]
-
 # --- 4. INISIALISASI DATABASE & AI (CRITICAL FIX) ---
 # Mengambil URL dari environment variable
 mongo_url = os.environ.get('MONGO_URL')
@@ -261,6 +258,42 @@ async def get_chat_sessions():
     except Exception as e:
         logger.error(f"❌ Error fetching sessions: {e}")
         raise HTTPException(status_code=500, detail="Error fetching sessions")
+
+@api_router.delete("/sessions/all")
+async def delete_all_sessions():
+    try:
+        count = await policy_db.delete_all_chat_sessions()
+        logger.info(f"Deleted all sessions: {count}")
+        return {"message": f"Successfully deleted {count} sessions", "count": count}
+    except Exception as e:
+        logger.error(f"Error deleting all sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete all sessions")
+    
+class BulkDeleteRequest(BaseModel):
+    session_ids: List[str]
+
+@api_router.delete("/sessions/batch")
+async def delete_multiple_sessions(request: BulkDeleteRequest):
+    try:
+        count = await policy_db.delete_chat_sessions(request.session_ids)
+        logger.info(f"Deleted {count} sessions")
+        return {"message": f"Successfully deleted {count} sessions", "count": count}
+    except Exception as e:
+        logger.error(f"Error deleting multiple sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete sessions")
+
+@api_router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    try:
+        success = await policy_db.delete_chat_session(session_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete session")
 
 @api_router.get("/sessions/{session_id}", response_model=ChatSession)
 async def get_chat_session(session_id: str):
@@ -572,39 +605,6 @@ else:
                 "path": f"/{full_path}"
             }
         )
-
-@api_router.delete("/sessions/all")
-async def delete_all_sessions():
-    try:
-        count = await policy_db.delete_all_chat_sessions()
-        logger.info(f"Deleted all sessions: {count}")
-        return {"message": f"Successfully deleted {count} sessions", "count": count}
-    except Exception as e:
-        logger.error(f"Error deleting all sessions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete all sessions")
-
-@api_router.delete("/sessions/batch")
-async def delete_multiple_sessions(request: BulkDeleteRequest):
-    try:
-        count = await policy_db.delete_chat_sessions(request.session_ids)
-        logger.info(f"Deleted {count} sessions")
-        return {"message": f"Successfully deleted {count} sessions", "count": count}
-    except Exception as e:
-        logger.error(f"Error deleting multiple sessions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete sessions")
-
-@api_router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
-    try:
-        success = await policy_db.delete_chat_session(session_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return {"message": "Session deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete session")
 
 # --- 13. LOG ALL ROUTES ON STARTUP ---
 @app.on_event("startup")
