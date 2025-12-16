@@ -11,6 +11,7 @@ import VoiceRecorder from "./VoiceRecorder";
 import UserMenu from "./UserMenu";
 import NewChatWelcome from "./NewChatWelcome";
 import { useChat } from "../contexts/ChatContext";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 
 const ChatInterface: React.FC = () => {
   const {
@@ -19,7 +20,15 @@ const ChatInterface: React.FC = () => {
     updateMessageInCurrentSession,
     createNewChat,
     exportCurrentChat,
+    switchToSession, // Pastikan ini diambil dari context
+    sessions, // Ambil sessions untuk cek validasi
   } = useChat();
+
+  // 2. Init Hooks Router
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [scrapingStatus, setScrapingStatus] = useState<"idle" | "in_progress">(
@@ -75,6 +84,28 @@ const ChatInterface: React.FC = () => {
       }
     }
   }, [realMessages.length]);
+
+  useEffect(() => {
+    // Jika ada sessionId di URL, muat sesinya
+    if (sessionId) {
+      // Cek apakah kita sudah di sesi yang benar untuk menghindari loop
+      if (currentSession?.id !== sessionId) {
+        switchToSession(sessionId);
+      }
+    } else {
+      // Jika URL adalah /dashboard (tanpa ID) dan kita sedang punya sesi aktif yg punya ID,
+      // Jangan reset, tapi biarkan user membuat chat baru jika mereka mau.
+      // Namun, jika aplikasi baru load (currentSession null/kosong), buat chat baru.
+
+      // Logika: Jika user navigasi manual ke /dashboard, berarti ingin New Chat
+      if (location.pathname === "/dashboard") {
+        // Hanya create new jika belum dalam mode new (id kosong)
+        if (currentSession?.id) {
+          createNewChat();
+        }
+      }
+    }
+  }, [sessionId, location.pathname]);
 
   useEffect(() => {
     // Check backend availability and get initial status
@@ -238,6 +269,10 @@ const ChatInterface: React.FC = () => {
         currentSession.id
       );
 
+      if (!sessionId && response.session_id) {
+        navigate(`/c/${response.session_id}`, { replace: true });
+      }
+
       // Create AI response message
       const aiResponse: ChatMessage = {
         id: response.session_id + "_" + Date.now(),
@@ -319,7 +354,10 @@ const ChatInterface: React.FC = () => {
       {!sidebarOpen && (
         <div className="hidden lg:block">
           <CollapsedSidebar
-            onNewChat={createNewChat}
+            onNewChat={() => {
+              createNewChat();
+              navigate('/dashboard'); // TAMBAHKAN INI DI KOMPONEN SIDEBAR ANDA
+            }}
             onShowHistory={() => setSidebarOpen(true)}
             onExport={exportCurrentChat}
           />
