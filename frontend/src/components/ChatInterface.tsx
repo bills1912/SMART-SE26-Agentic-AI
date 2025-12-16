@@ -59,15 +59,23 @@ const ChatInterface: React.FC = () => {
     (msg) => !msg.id?.startsWith("welcome_")
   );
 
-  // --- LOGIC PERBAIKAN LOADING & STATUS ---
+  // --- LOGIC PERBAIKAN LOADING & STATUS (BUG FIX NUMBER VS STRING) ---
   
   // Check if this is a new empty chat
-  // Kita anggap "New Chat" jika TIDAK ada sessionId di URL.
   const isNewChat = !sessionId;
 
-  // Kita anggap "Loading Session" jika ada ID di URL, TAPI context belum memuat ID tersebut
+  // FIX: Kita konversi currentSession.id ke String sebelum membandingkan.
+  // Ini mengatasi masalah di mana API mengembalikan ID angka (number) tapi URL adalah string.
+  const isIdMismatch = sessionId && currentSession?.id && String(currentSession.id) !== sessionId;
+
+  // Kita anggap "Loading Session" jika:
+  // 1. Ada ID di URL tapi context belum punya session sama sekali.
+  // 2. Ada ID di URL tapi ID-nya tidak cocok dengan yang ada di context (Mismatch).
+  // 3. Context sendiri sedang status loading.
   const isSessionLoading =
-    !!sessionId && (!currentSession || currentSession.id !== sessionId);
+    (!!sessionId && !currentSession) ||
+    (!!sessionId && isIdMismatch) ||
+    (isContextLoading && !!sessionId);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -80,15 +88,14 @@ const ChatInterface: React.FC = () => {
   };
 
   // IMPROVISASI: Safety Timeout Effect
-  // Jika loading sesi memakan waktu lebih dari 5 detik, aktifkan mode "Long Loading"
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     if (isSessionLoading) {
       setIsLongLoading(false); // Reset saat mulai loading
       timeoutId = setTimeout(() => {
-        setIsLongLoading(true); // Trigger UI bantuan jika stuck
-      }, 5000); // Dipercepat ke 5 detik agar user cepat sadar
+        setIsLongLoading(true); // Trigger UI bantuan jika stuck > 5 detik
+      }, 5000); 
     } else {
       setIsLongLoading(false);
     }
@@ -114,26 +121,24 @@ const ChatInterface: React.FC = () => {
   // --- CORE FIX: PERBAIKAN LOGIKA SWITCH SESSION & NEW CHAT ---
 
   // FIX 1: Handle Perubahan Sesi (History Click)
-  // Dipisahkan agar tidak konflik dengan update context
+  // Menambahkan dependency currentSession?.id dan String conversion check
   useEffect(() => {
     if (sessionId) {
-      // Hanya switch jika ID di URL berbeda dengan yang aktif sekarang
-      if (currentSession?.id !== sessionId) {
+      // Cek menggunakan string conversion agar aman
+      const currentIdString = currentSession?.id ? String(currentSession.id) : "";
+      
+      if (currentIdString !== sessionId) {
         try {
-          // Kita panggil fungsi switch. 
-          // Karena void, kita tidak pakai .catch atau await
+          // Panggil switch session
           switchToSession(sessionId);
         } catch (error) {
           console.error("Error triggering switch session:", error);
         }
       }
     }
-    // DEPENDENCY PENTING: Hanya [sessionId]. 
-    // Jangan masukkan [currentSession] di sini untuk mencegah infinite loop.
-  }, [sessionId]); 
+  }, [sessionId, currentSession?.id]); // Dependency diperbarui agar responsif
 
   // FIX 2: Handle New Chat (Dashboard Navigation)
-  // Dipisahkan ke useEffect sendiri
   useEffect(() => {
     // Jika kita di dashboard (tidak ada sessionId) TAPI masih ada sesi nyangkut di memori
     if (!sessionId && location.pathname.includes("/dashboard")) {
