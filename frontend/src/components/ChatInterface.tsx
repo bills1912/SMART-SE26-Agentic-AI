@@ -22,6 +22,7 @@ const ChatInterface: React.FC = () => {
     exportCurrentChat,
     switchToSession, // Pastikan ini diambil dari context
     sessions, // Ambil sessions untuk cek validasi
+    isLoading: isContextLoading,
   } = useChat();
 
   // 2. Init Hooks Router
@@ -58,7 +59,15 @@ const ChatInterface: React.FC = () => {
   );
 
   // Check if this is a new empty chat
-  const isNewChat = !sessionId;
+
+  const isSessionLoading =
+    sessionId && (!currentSession || currentSession.id !== sessionId);
+  const isNewChat =
+    !sessionId ||
+    (!isSessionLoading &&
+      currentSession?.messages &&
+      currentSession.messages.filter((m) => !m.id?.startsWith("welcome"))
+        .length === 0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -334,6 +343,19 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  if (isSessionLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-orange-600 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-300 font-medium">
+            Mengambil riwayat percakapan...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       {/* Chat Sidebar - Overlay on mobile, fixed on desktop */}
@@ -356,7 +378,7 @@ const ChatInterface: React.FC = () => {
           <CollapsedSidebar
             onNewChat={() => {
               createNewChat();
-              navigate('/dashboard'); // TAMBAHKAN INI DI KOMPONEN SIDEBAR ANDA
+              navigate("/dashboard"); // TAMBAHKAN INI DI KOMPONEN SIDEBAR ANDA
             }}
             onShowHistory={() => setSidebarOpen(true)}
             onExport={exportCurrentChat}
