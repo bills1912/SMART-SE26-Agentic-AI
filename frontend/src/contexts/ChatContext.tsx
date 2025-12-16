@@ -44,10 +44,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const loadChatHistory = async () => {
     try {
-      setIsLoading(true);
+      // Note: Kita tidak set isLoading(true) global di sini agar tidak memblokir UI utama
+      // saat sidebar sedang memuat list history.
       const chatSessions = await apiService.getSessions();
       
-      // FIX: Normalisasi ID menjadi String saat load awal
+      // FIX: Normalisasi ID menjadi String untuk konsistensi dengan URL
       const normalizedSessions = chatSessions.map(s => ({
         ...s,
         id: String(s.id)
@@ -55,20 +56,18 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       
       setSessions(normalizedSessions);
       
-      // Always start with a new empty chat if no session selected
-      if (!currentSession) {
-        createNewChat();
-      }
+      // PERBAIKAN PENTING:
+      // Jangan panggil createNewChat() di sini! 
+      // Biarkan Router (ChatInterface) yang menentukan apakah harus load sesi tertentu atau buat baru.
+      // Jika dipaksa createNewChat(), ini akan menimpa proses switchToSession yang sedang berjalan.
+      
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      createNewChat();
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const createNewChat = () => {
-    // FIX: Pastikan loading dimatikan saat reset ke chat baru
+    // Reset state loading agar tidak nyangkut
     setIsLoading(false);
     
     const newSession: ChatSession = {
@@ -87,18 +86,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // FIX: Cek apakah session sudah ada di cache (sessions array) untuk fast switching
-      // Konversi ke string untuk perbandingan aman
+      // Optimistic Update: Cek apakah sesi sudah ada di list sessions
+      // Gunakan String() untuk perbandingan yang aman (Number vs String)
       const existingSession = sessions.find(s => String(s.id) === String(sessionId));
+      
       if (existingSession && existingSession.messages && existingSession.messages.length > 0) {
+         // Jika ada di cache, tampilkan dulu agar cepat
          setCurrentSession(existingSession);
-         // Tetap fetch background untuk update terbaru, tapi UI sudah jalan duluan
       }
 
+      // Fetch fresh data from API
       const session = await apiService.getSession(sessionId);
       
-      // FIX UTAMA: Konversi ID dari API (number) ke String secara paksa
-      // Ini mengatasi bug "Infinite Loading" karena ketidakcocokan tipe data
+      // FIX: Paksa konversi ID ke String agar cocok dengan URL params
       const normalizedSession = {
         ...session,
         id: String(session.id)
@@ -107,6 +107,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       setCurrentSession(normalizedSession);
     } catch (error) {
       console.error('Failed to switch to session:', error);
+      // Jangan reset ke createNewChat() di sini, biarkan UI menangani error state
     } finally {
       setIsLoading(false);
     }
@@ -132,10 +133,12 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         return updatedSession;
       });
       
-      // Update sessions list
+      // Update sessions list (Sidebar) secara real-time
       setSessions(prevSessions => {
-        // FIX: Pastikan ID string
-        const sessionId = currentSession.id ? String(currentSession.id) : (message.session_id ? String(message.session_id) : '');
+        const sessionId = currentSession.id 
+          ? String(currentSession.id) 
+          : (message.session_id ? String(message.session_id) : '');
+          
         if (!sessionId) return prevSessions;
         
         const existingIndex = prevSessions.findIndex(s => String(s.id) === sessionId);
@@ -162,7 +165,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }
   };
 
-  // Update a message in the current session
   const updateMessageInCurrentSession = (messageId: string, newContent: string) => {
     if (currentSession) {
       setCurrentSession(prevSession => {
@@ -186,7 +188,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         if (!currentSession.id) return prevSessions;
         
         return prevSessions.map(session => {
-          if (String(session.id) === String(currentSession.id)) { // FIX: String compare
+          if (String(session.id) === String(currentSession.id)) {
             return {
               ...session,
               messages: session.messages.map(msg =>
@@ -269,10 +271,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       await apiService.deleteSession(sessionId);
       
-      // Update state lokal - Gunakan String compare
+      // Update state lokal
       setSessions(prev => prev.filter(s => String(s.id) !== String(sessionId)));
       
-      // Jika sesi yang dihapus adalah sesi aktif, buat chat baru
+      // Jika sesi yang dihapus adalah sesi aktif, reset ke new chat
       if (currentSession && String(currentSession.id) === String(sessionId)) {
         createNewChat();
       }
@@ -286,7 +288,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       await apiService.deleteSessions(sessionIds);
       
-      // Konversi sessionIds ke string semua untuk filtering
       const stringIds = sessionIds.map(id => String(id));
       setSessions(prev => prev.filter(s => !stringIds.includes(String(s.id))));
       
