@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, Database, Menu } from "lucide-react";
+import { Send, Bot, User, Loader2, Database, Menu, AlertCircle, ArrowLeft } from "lucide-react";
 import { ChatMessage } from "../types/chat";
 import MessageBubble from "./MessageBubble";
 import { toast } from "../hooks/use-toast";
@@ -20,8 +20,8 @@ const ChatInterface: React.FC = () => {
     updateMessageInCurrentSession,
     createNewChat,
     exportCurrentChat,
-    switchToSession, // Pastikan ini diambil dari context
-    sessions, // Ambil sessions untuk cek validasi
+    switchToSession, 
+    sessions, 
     isLoading: isContextLoading,
   } = useChat();
 
@@ -32,11 +32,13 @@ const ChatInterface: React.FC = () => {
 
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [scrapingStatus, setScrapingStatus] = useState<"idle" | "in_progress">(
-    "idle"
-  );
+  const [scrapingStatus, setScrapingStatus] = useState<"idle" | "in_progress">("idle");
   const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // IMPROVISASI: State untuk mendeteksi loading yang terlalu lama (stuck)
+  const [isLongLoading, setIsLongLoading] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
@@ -45,7 +47,6 @@ const ChatInterface: React.FC = () => {
   const handleVoiceTranscript = (transcript: string) => {
     if (transcript.trim()) {
       setInputMessage((prev) => (prev + " " + transcript).trim());
-      // Auto-focus textarea after voice input
       textareaRef.current?.focus();
     }
   };
@@ -59,9 +60,10 @@ const ChatInterface: React.FC = () => {
   );
 
   // Check if this is a new empty chat
-
+  // IMPROVISASI: Definisi isSessionLoading diperketat agar tidak stuck saat null
   const isSessionLoading =
-    sessionId && (!currentSession || currentSession.id !== sessionId);
+    !!sessionId && (!currentSession || currentSession.id !== sessionId);
+
   const isNewChat =
     !sessionId ||
     (!isSessionLoading &&
@@ -79,16 +81,33 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  // IMPROVISASI: Safety Timeout Effect
+  // Jika loading sesi memakan waktu lebih dari 8 detik, aktifkan mode "Long Loading"
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    if (isSessionLoading) {
+      setIsLongLoading(false); // Reset dulu
+      timeoutId = setTimeout(() => {
+        setIsLongLoading(true); // Trigger UI bantuan jika stuck
+      }, 8000); // 8 detik toleransi
+    } else {
+      setIsLongLoading(false);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isSessionLoading]);
+
   // Scroll management for messages
   useEffect(() => {
     if (realMessages.length > 0) {
-      // For first 2 messages (user + AI response), scroll to top
       if (realMessages.length <= 2) {
         setTimeout(() => {
           scrollToTop();
         }, 300);
       } else {
-        // For subsequent messages, scroll to bottom
         scrollToBottom();
       }
     }
@@ -99,25 +118,25 @@ const ChatInterface: React.FC = () => {
     if (sessionId) {
       // Cek apakah kita sudah di sesi yang benar untuk menghindari loop
       if (currentSession?.id !== sessionId) {
-        switchToSession(sessionId);
+        // PERBAIKAN: Menghapus .catch() karena switchToSession mengembalikan void
+        try {
+          switchToSession(sessionId);
+        } catch (error) {
+          console.error("Error switching session:", error);
+        }
       }
     } else {
       // Jika URL adalah /dashboard (tanpa ID) dan kita sedang punya sesi aktif yg punya ID,
       // Jangan reset, tapi biarkan user membuat chat baru jika mereka mau.
-      // Namun, jika aplikasi baru load (currentSession null/kosong), buat chat baru.
-
-      // Logika: Jika user navigasi manual ke /dashboard, berarti ingin New Chat
       if (location.pathname === "/dashboard") {
-        // Hanya create new jika belum dalam mode new (id kosong)
         if (currentSession?.id) {
           createNewChat();
         }
       }
     }
-  }, [sessionId, location.pathname]);
+  }, [sessionId, location.pathname, currentSession?.id]); 
 
   useEffect(() => {
-    // Check backend availability and get initial status
     checkBackendStatus();
   }, []);
 
@@ -140,32 +159,25 @@ const ChatInterface: React.FC = () => {
   const handleEditMessage = async (messageId: string, newContent: string) => {
     if (!currentSession || !newContent.trim()) return;
 
-    // Find the message index
     const messageIndex = currentSession.messages.findIndex(
       (msg) => msg.id === messageId
     );
     if (messageIndex === -1) return;
 
-    // Update the message content
     if (updateMessageInCurrentSession) {
       updateMessageInCurrentSession(messageId, newContent);
     }
 
-    // If it's a user message, we need to regenerate the AI response
     const editedMessage = currentSession.messages[messageIndex];
     if (editedMessage.sender === "user") {
-      // Remove all messages after the edited message
-      // Then send the edited message as a new query
       setIsLoading(true);
 
       try {
-        // Call API with edited message
         const response = await apiService.sendMessage(
           newContent,
           currentSession.id
         );
 
-        // Create AI response message
         const aiResponse: ChatMessage = {
           id: response.session_id + "_" + Date.now(),
           session_id: response.session_id,
@@ -177,13 +189,11 @@ const ChatInterface: React.FC = () => {
           policies: response.policies || [],
         };
 
-        // Add AI response to session
         addMessageToCurrentSession(aiResponse);
 
         toast({
           title: "Message Updated",
-          description:
-            "Your message has been edited and a new response generated.",
+          description: "Your message has been edited and a new response generated.",
         });
       } catch (error: any) {
         console.error("Error regenerating response:", error);
@@ -198,17 +208,14 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  // Handle regenerate AI response
   const handleRegenerateResponse = async (messageId: string) => {
     if (!currentSession || isLoading) return;
 
-    // Find the AI message
     const aiMessageIndex = currentSession.messages.findIndex(
       (msg) => msg.id === messageId
     );
     if (aiMessageIndex === -1) return;
 
-    // Find the preceding user message
     let userMessage: ChatMessage | null = null;
     for (let i = aiMessageIndex - 1; i >= 0; i--) {
       if (currentSession.messages[i].sender === "user") {
@@ -222,13 +229,11 @@ const ChatInterface: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Call API to regenerate
       const response = await apiService.sendMessage(
         userMessage.content,
         currentSession.id
       );
 
-      // Update the AI message with new content
       if (updateMessageInCurrentSession) {
         updateMessageInCurrentSession(messageId, response.message);
       }
@@ -260,7 +265,6 @@ const ChatInterface: React.FC = () => {
       timestamp: new Date(),
     };
 
-    // Add user message to session
     addMessageToCurrentSession(userMessage);
 
     const originalMessage = inputMessage.trim();
@@ -272,7 +276,6 @@ const ChatInterface: React.FC = () => {
         throw new Error("Backend service is currently unavailable");
       }
 
-      // Call real API
       const response = await apiService.sendMessage(
         originalMessage,
         currentSession.id
@@ -282,7 +285,6 @@ const ChatInterface: React.FC = () => {
         navigate(`/c/${response.session_id}`, { replace: true });
       }
 
-      // Create AI response message
       const aiResponse: ChatMessage = {
         id: response.session_id + "_" + Date.now(),
         session_id: response.session_id,
@@ -294,7 +296,6 @@ const ChatInterface: React.FC = () => {
         policies: response.policies || [],
       };
 
-      // Add AI response to session
       addMessageToCurrentSession(aiResponse);
 
       toast({
@@ -306,13 +307,11 @@ const ChatInterface: React.FC = () => {
         }`,
       });
 
-      // Update scraping status
       const health = await apiService.getHealth();
       setScrapingStatus(health.scraping_status);
     } catch (error: any) {
       console.error("Error sending message:", error);
 
-      // Fallback response for errors
       const errorResponse: ChatMessage = {
         id: "error_" + Date.now(),
         session_id: currentSession.id || "",
@@ -343,15 +342,43 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  // IMPROVISASI: Tampilan Loading dengan tombol Exit jika stuck
   if (isSessionLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 flex-col px-4">
+        <div className="text-center mb-6">
           <Loader2 className="h-10 w-10 animate-spin text-orange-600 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-300 font-medium">
             Mengambil riwayat percakapan...
           </p>
+          {/* Tampilkan pesan tambahan jika loading > 8 detik */}
+          {isLongLoading && (
+            <p className="text-sm text-gray-400 mt-2 animate-pulse">
+              Sedikit lebih lama dari biasanya...
+            </p>
+          )}
         </div>
+
+        {/* IMPROVISASI: Tombol Emergency Exit jika loading stuck */}
+        {isLongLoading && (
+          <div className="flex flex-col gap-3 items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-lg border border-amber-200 dark:border-amber-800 text-sm mb-2">
+                <AlertCircle className="h-4 w-4" />
+                <span>Koneksi atau ID sesi mungkin bermasalah.</span>
+             </div>
+             
+             <button 
+                onClick={() => {
+                   createNewChat();
+                   navigate('/dashboard');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors shadow-sm"
+             >
+                <ArrowLeft className="h-4 w-4" />
+                Kembali ke Dashboard & Buat Chat Baru
+             </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -378,7 +405,7 @@ const ChatInterface: React.FC = () => {
           <CollapsedSidebar
             onNewChat={() => {
               createNewChat();
-              navigate("/dashboard"); // TAMBAHKAN INI DI KOMPONEN SIDEBAR ANDA
+              navigate("/dashboard");
             }}
             onShowHistory={() => setSidebarOpen(true)}
             onExport={exportCurrentChat}
