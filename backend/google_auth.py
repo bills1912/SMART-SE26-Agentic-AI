@@ -37,7 +37,7 @@ class GoogleOAuth:
         
         # Determine backend URL for callback
         # In production, this should be set explicitly
-        self.backend_url = os.environ.get('BACKEND_URL')
+        self.backend_url = os.environ.get('REACT_APP_BACKEND_URL')
         if not self.backend_url:
             # Try to construct from environment
             host = os.environ.get('HOST', 'localhost')
