@@ -32,6 +32,10 @@ interface ChatProviderProps {
   children: React.ReactNode;
 }
 
+// Storage keys untuk auth status (harus sama dengan AuthContext)
+const AUTH_STATUS_KEY = 'se26_auth_status';
+const AUTH_TIMESTAMP_KEY = 'se26_auth_timestamp';
+
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -40,10 +44,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   // Refs to prevent race conditions
   const loadingHistoryRef = useRef(false);
   const currentSwitchRef = useRef<string | null>(null);
+  const lastAuthTimestampRef = useRef<string | null>(null);
 
-  // Load chat history on initialization
-  useEffect(() => {
-    loadChatHistory();
+  // Check if user is authenticated by looking at localStorage
+  const checkAuthStatus = useCallback(() => {
+    const authStatus = localStorage.getItem(AUTH_STATUS_KEY);
+    const authTimestamp = localStorage.getItem(AUTH_TIMESTAMP_KEY);
+    return {
+      isAuthenticated: authStatus === 'authenticated',
+      timestamp: authTimestamp
+    };
   }, []);
 
   const loadChatHistory = useCallback(async () => {
@@ -74,6 +84,68 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       loadingHistoryRef.current = false;
     }
   }, []);
+
+  // Load chat history on initialization AND when auth status changes
+  useEffect(() => {
+    const { isAuthenticated, timestamp } = checkAuthStatus();
+    
+    console.log('[ChatContext] Auth check:', { isAuthenticated, timestamp, lastTimestamp: lastAuthTimestampRef.current });
+    
+    // Load history if:
+    // 1. User is authenticated AND
+    // 2. Either first load OR auth timestamp changed (new login)
+    if (isAuthenticated) {
+      if (lastAuthTimestampRef.current !== timestamp) {
+        console.log('[ChatContext] Auth status changed or first load, reloading history');
+        lastAuthTimestampRef.current = timestamp;
+        loadChatHistory();
+      }
+    } else {
+      // Not authenticated - clear sessions
+      console.log('[ChatContext] Not authenticated, clearing sessions');
+      setSessions([]);
+      lastAuthTimestampRef.current = null;
+    }
+  }, [checkAuthStatus, loadChatHistory]);
+
+  // Listen for storage changes (for multi-tab support and auth changes)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === AUTH_STATUS_KEY || e.key === AUTH_TIMESTAMP_KEY) {
+        console.log('[ChatContext] Storage changed, checking auth status');
+        const { isAuthenticated, timestamp } = checkAuthStatus();
+        
+        if (isAuthenticated && lastAuthTimestampRef.current !== timestamp) {
+          console.log('[ChatContext] Auth changed via storage event, reloading history');
+          lastAuthTimestampRef.current = timestamp;
+          loadChatHistory();
+        } else if (!isAuthenticated) {
+          console.log('[ChatContext] Logged out via storage event, clearing sessions');
+          setSessions([]);
+          setCurrentSession(null);
+          lastAuthTimestampRef.current = null;
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [checkAuthStatus, loadChatHistory]);
+
+  // Also check periodically for auth changes (handles same-tab login)
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      const { isAuthenticated, timestamp } = checkAuthStatus();
+      
+      if (isAuthenticated && lastAuthTimestampRef.current !== timestamp) {
+        console.log('[ChatContext] Periodic check: auth changed, reloading history');
+        lastAuthTimestampRef.current = timestamp;
+        loadChatHistory();
+      }
+    }, 2000); // Check every 2 seconds
+
+    return () => clearInterval(checkInterval);
+  }, [checkAuthStatus, loadChatHistory]);
 
   const createNewChat = useCallback(() => {
     console.log('[ChatContext] Creating new chat');
