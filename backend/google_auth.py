@@ -8,10 +8,15 @@ import logging
 from typing import Optional, Dict, Any
 from urllib.parse import urlencode
 import httpx
+from pathlib import Path
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-
+BACKEND_DIR = Path(__file__).resolve().parent
+# Naik satu level ke root, lalu masuk ke frontend/.env
+ENV_PATH = BACKEND_DIR.parent / 'frontend' / '.env'
+load_dotenv(ENV_PATH)
 class GoogleOAuth:
     """
     Handle Google OAuth 2.0 flow:
