@@ -50,8 +50,15 @@ class PolicyDatabase:
                     # Text index might already exist
                     logger.debug(f"Text index already exists or error: {e}")
                 
+                # Chat session indexes - UPDATED with user_id
+                await self.db.chat_sessions.create_index("user_id", background=True)  # NEW
                 await self.db.chat_sessions.create_index("created_at", background=True)
                 await self.db.chat_sessions.create_index("updated_at", background=True)
+                await self.db.chat_sessions.create_index(
+                    [("user_id", 1), ("updated_at", -1)], 
+                    background=True
+                )  # Compound index for efficient user session queries
+                
                 await self.db.chat_messages.create_index("session_id", background=True)
                 await self.db.chat_messages.create_index("timestamp", background=True)
                 
@@ -147,27 +154,45 @@ class PolicyDatabase:
             logger.error(f"Error searching scraped data: {e}")
             return []
 
-    # Chat Session operations
-    async def create_chat_session(self, title: str = "Policy Analysis Session") -> ChatSession:
-        """Create a new chat session"""
+    # ============================================
+    # CHAT SESSION OPERATIONS - UPDATED WITH USER_ID
+    # ============================================
+    
+    async def create_chat_session(self, title: str = "Policy Analysis Session", user_id: Optional[str] = None) -> ChatSession:
+        """
+        Create a new chat session for a specific user
+        
+        Args:
+            title: Session title
+            user_id: User ID who owns this session (None for anonymous/legacy)
+        """
         try:
-            session = ChatSession(title=title)
+            session = ChatSession(title=title, user_id=user_id)
             await self.db.chat_sessions.insert_one(session.dict())
+            logger.info(f"Created chat session {session.id} for user {user_id or 'anonymous'}")
             return session
         except Exception as e:
             logger.error(f"Error creating chat session: {e}")
             raise
 
-    async def get_chat_session(self, session_id: str) -> Optional[ChatSession]:
-        """Get chat session by ID (Fixed for Embedded Messages)"""
+    async def get_chat_session(self, session_id: str, user_id: Optional[str] = None) -> Optional[ChatSession]:
+        """
+        Get chat session by ID, optionally verifying user ownership
+        
+        Args:
+            session_id: Session ID to fetch
+            user_id: If provided, verify the session belongs to this user
+        """
         try:
-            # Mengambil session langsung. Karena kita mengubah strategi penyimpanan
-            # menjadi 'Embedded', pesan sudah ada di dalam dokumen ini.
-            session_data = await self.db.chat_sessions.find_one({"id": session_id})
+            query = {"id": session_id}
+            
+            # If user_id provided, add ownership check
+            if user_id:
+                query["user_id"] = user_id
+            
+            session_data = await self.db.chat_sessions.find_one(query)
             
             if session_data:
-                # Tidak perlu lagi query ke chat_messages terpisah
-                # Pydantic akan otomatis memvalidasi struktur data
                 return ChatSession(**session_data)
             return None
         except Exception as e:
@@ -177,26 +202,24 @@ class PolicyDatabase:
     async def save_chat_message(self, message: ChatMessage) -> bool:
         """
         Save a chat message DIRECTLY into the session document (Embedded Pattern).
-        Ini memperbaiki bug pesan hilang dan reload reset.
         """
         try:
             # 1. Konversi pesan ke dictionary
             message_dict = message.dict()
             
-            # 2. Pastikan timestamp dalam format string ISO agar MongoDB bisa menyimpannya dengan aman
+            # 2. Pastikan timestamp dalam format string ISO
             if 'timestamp' in message_dict and isinstance(message_dict['timestamp'], datetime):
                 message_dict['timestamp'] = message_dict['timestamp'].isoformat()
             
-            # 3. Gunakan $push untuk memasukkan pesan ke dalam array 'messages' di dokumen session
+            # 3. Gunakan $push untuk memasukkan pesan ke dalam array 'messages'
             result = await self.db.chat_sessions.update_one(
                 {"id": message.session_id},
                 {
-                    "$push": {"messages": message_dict},     # Masukkan pesan ke array
-                    "$set": {"updated_at": datetime.utcnow()} # Update waktu terakhir
+                    "$push": {"messages": message_dict},
+                    "$set": {"updated_at": datetime.utcnow()}
                 }
             )
             
-            # Cek apakah update berhasil
             if result.modified_count > 0:
                 return True
             else:
@@ -207,22 +230,156 @@ class PolicyDatabase:
             logger.error(f"Error saving chat message: {e}")
             return False
 
-    async def get_chat_sessions(self, limit: int = 10) -> List[ChatSession]:
-        """Get recent chat sessions"""
+    async def get_chat_sessions(self, limit: int = 10, user_id: Optional[str] = None) -> List[ChatSession]:
+        """
+        Get recent chat sessions for a specific user
+        
+        Args:
+            limit: Maximum number of sessions to return
+            user_id: Filter sessions by user (required for user-specific queries)
+        """
         try:
-            cursor = self.db.chat_sessions.find().sort("updated_at", -1).limit(limit)
+            # Build query based on user_id
+            query = {}
+            if user_id:
+                query["user_id"] = user_id
+            else:
+                # For backwards compatibility: if no user_id, only return sessions without user_id
+                # This prevents leaking other users' sessions
+                query["user_id"] = {"$exists": False}
+            
+            cursor = self.db.chat_sessions.find(query).sort("updated_at", -1).limit(limit)
             sessions_data = await cursor.to_list(length=limit)
             
             sessions = []
             for session_data in sessions_data:
-                message_count = await self.db.chat_messages.count_documents({"session_id": session_data["id"]})
+                # Count embedded messages instead of separate collection
+                message_count = len(session_data.get("messages", []))
                 session_data["message_count"] = message_count
                 sessions.append(ChatSession(**session_data))
             
+            logger.info(f"Fetched {len(sessions)} sessions for user {user_id or 'anonymous'}")
             return sessions
         except Exception as e:
             logger.error(f"Error fetching chat sessions: {e}")
             return []
+
+    async def delete_chat_session(self, session_id: str, user_id: Optional[str] = None) -> bool:
+        """
+        Delete a single chat session with optional user ownership verification
+        
+        Args:
+            session_id: Session ID to delete
+            user_id: If provided, verify the session belongs to this user before deleting
+        """
+        try:
+            query = {"id": session_id}
+            
+            # If user_id provided, add ownership check (prevents deleting other users' sessions)
+            if user_id:
+                query["user_id"] = user_id
+            
+            result = await self.db.chat_sessions.delete_one(query)
+            
+            if result.deleted_count > 0:
+                logger.info(f"Deleted session {session_id} for user {user_id or 'any'}")
+                return True
+            else:
+                logger.warning(f"Session {session_id} not found or not owned by user {user_id}")
+                return False
+        except Exception as e:
+            logger.error(f"Error deleting session {session_id}: {e}")
+            return False
+
+    async def delete_chat_sessions(self, session_ids: List[str], user_id: Optional[str] = None) -> int:
+        """
+        Delete multiple chat sessions (Bulk) with optional user ownership verification
+        
+        Args:
+            session_ids: List of session IDs to delete
+            user_id: If provided, only delete sessions belonging to this user
+        """
+        try:
+            query = {"id": {"$in": session_ids}}
+            
+            # If user_id provided, add ownership check
+            if user_id:
+                query["user_id"] = user_id
+            
+            result = await self.db.chat_sessions.delete_many(query)
+            logger.info(f"Bulk deleted {result.deleted_count} sessions for user {user_id or 'any'}")
+            return result.deleted_count
+        except Exception as e:
+            logger.error(f"Error bulk deleting sessions: {e}")
+            return 0
+
+    async def delete_all_chat_sessions(self, user_id: Optional[str] = None) -> int:
+        """
+        Delete ALL chat sessions for a specific user
+        
+        Args:
+            user_id: If provided, only delete sessions belonging to this user
+                     If None, deletes ALL sessions (admin operation)
+        """
+        try:
+            query = {}
+            
+            # If user_id provided, only delete that user's sessions
+            if user_id:
+                query["user_id"] = user_id
+            
+            result = await self.db.chat_sessions.delete_many(query)
+            logger.info(f"Deleted all {result.deleted_count} sessions for user {user_id or 'ALL USERS'}")
+            return result.deleted_count
+        except Exception as e:
+            logger.error(f"Error deleting all sessions: {e}")
+            return 0
+
+    async def verify_session_ownership(self, session_id: str, user_id: str) -> bool:
+        """
+        Verify that a session belongs to a specific user
+        
+        Args:
+            session_id: Session ID to check
+            user_id: User ID to verify ownership
+            
+        Returns:
+            True if the session belongs to the user, False otherwise
+        """
+        try:
+            session = await self.db.chat_sessions.find_one(
+                {"id": session_id, "user_id": user_id},
+                {"_id": 0, "id": 1}  # Only fetch id field for efficiency
+            )
+            return session is not None
+        except Exception as e:
+            logger.error(f"Error verifying session ownership: {e}")
+            return False
+
+    async def migrate_anonymous_sessions_to_user(self, user_id: str, session_ids: List[str]) -> int:
+        """
+        Migrate anonymous sessions to a user (for users who created sessions before logging in)
+        
+        Args:
+            user_id: User ID to assign sessions to
+            session_ids: List of session IDs to migrate
+            
+        Returns:
+            Number of sessions migrated
+        """
+        try:
+            result = await self.db.chat_sessions.update_many(
+                {
+                    "id": {"$in": session_ids},
+                    "user_id": {"$exists": False}  # Only migrate anonymous sessions
+                },
+                {"$set": {"user_id": user_id}}
+            )
+            logger.info(f"Migrated {result.modified_count} sessions to user {user_id}")
+            return result.modified_count
+        except Exception as e:
+            logger.error(f"Error migrating sessions: {e}")
+            return 0
 
     # Policy data operations
     async def save_policy_insights(self, insights: List[PolicyInsight]) -> int:
@@ -278,34 +435,6 @@ class PolicyDatabase:
             self._connected = False
             logger.info("Database connection closed")
 
-    async def delete_chat_session(self, session_id: str) -> bool:
-        """Delete a single chat session"""
-        try:
-            result = await self.db.chat_sessions.delete_one({"id": session_id})
-            return result.deleted_count > 0
-        except Exception as e:
-            logger.error(f"Error deleting session {session_id}: {e}")
-            return False
-
-    async def delete_chat_sessions(self, session_ids: List[str]) -> int:
-        """Delete multiple chat sessions (Bulk)"""
-        try:
-            result = await self.db.chat_sessions.delete_many({
-                "id": {"$in": session_ids}
-            })
-            return result.deleted_count
-        except Exception as e:
-            logger.error(f"Error bulk deleting sessions: {e}")
-            return 0
-
-    async def delete_all_chat_sessions(self) -> int:
-        """Delete ALL chat sessions"""
-        try:
-            result = await self.db.chat_sessions.delete_many({})
-            return result.deleted_count
-        except Exception as e:
-            logger.error(f"Error deleting all sessions: {e}")
-            return 0
         
 # Dependency for FastAPI routes
 _db_instance = None

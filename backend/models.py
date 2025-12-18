@@ -80,6 +80,7 @@ class ChatMessage(BaseModel):
 
 class ChatSession(BaseModel):
     id: str = Field(default_factory=lambda: str(datetime.utcnow().timestamp()))
+    user_id: Optional[str] = None  # NEW: Link session to user (None for legacy/anonymous)
     title: str = "Policy Analysis Session"
     messages: List[ChatMessage] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -86,6 +86,53 @@ last_scraping_time = None
 # --- FRONTEND BUILD PATH (DEFINED EARLY) ---
 FRONTEND_BUILD_PATH = BACKEND_DIR.parent / "frontend" / "build"
 
+
+# ============================================
+# AUTHENTICATION DEPENDENCY
+# ============================================
+from auth_service import AuthService
+from database import get_database
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+async def get_auth_service(db: AsyncIOMotorDatabase = Depends(get_database)) -> AuthService:
+    """Dependency to get AuthService instance"""
+    return AuthService(db)
+
+async def get_current_user_optional(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Optional[dict]:
+    """
+    Get current user if authenticated, otherwise return None
+    Used for endpoints that work with or without authentication
+    """
+    try:
+        user = await auth_service.authenticate_user(request)
+        return {"user_id": user.user_id, "email": user.email, "name": user.name}
+    except HTTPException:
+        return None
+    except Exception as e:
+        logger.debug(f"Optional auth check failed: {e}")
+        return None
+
+async def get_current_user_required(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service)
+) -> dict:
+    """
+    Get current user, raises 401 if not authenticated
+    Used for endpoints that require authentication
+    """
+    try:
+        user = await auth_service.authenticate_user(request)
+        return {"user_id": user.user_id, "email": user.email, "name": user.name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth check failed: {e}")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+
 # --- 6. EVENT HANDLERS (STARTUP/SHUTDOWN) ---
 @app.on_event("startup")
 async def startup_event():
@@ -161,24 +208,53 @@ async def health_check():
             content={"status": "unhealthy", "error": str(e)}
         )
 
+
+# ============================================
+# CHAT ENDPOINTS - NOW WITH USER AUTHENTICATION
+# ============================================
+
 @api_router.post("/chat", response_model=PolicyAnalysisResponse)
-async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: BackgroundTasks):
+async def analyze_policy(
+    request: PolicyAnalysisRequest, 
+    background_tasks: BackgroundTasks,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Analyze policy query and generate response
+    
+    - If user is authenticated: session is linked to their account
+    - If user is not authenticated: session is anonymous (legacy behavior)
+    """
     try:
         if not ai_analyzer:
             raise HTTPException(status_code=503, detail="AI Analyzer not initialized")
         
-        logger.info(f"📝 Received chat request: {request.message[:50]}...")
+        user_id = current_user.get("user_id") if current_user else None
+        logger.info(f"📝 Received chat request from user {user_id or 'anonymous'}: {request.message[:50]}...")
         
         # Get or create session
         session_id = request.session_id
         if not session_id:
-            session = await policy_db.create_chat_session()
+            # Create new session with user_id
+            session = await policy_db.create_chat_session(user_id=user_id)
             session_id = session.id
         else:
-            existing_session = await policy_db.get_chat_session(session_id)
+            # Verify session exists and user has access
+            existing_session = await policy_db.get_chat_session(session_id, user_id=user_id)
             if not existing_session:
-                session = await policy_db.create_chat_session()
-                session_id = session.id
+                # Session not found or doesn't belong to user
+                # Check if session exists at all (might be anonymous session or other user's)
+                any_session = await policy_db.get_chat_session(session_id)
+                if any_session:
+                    # Session exists but belongs to different user
+                    if user_id and any_session.user_id and any_session.user_id != user_id:
+                        raise HTTPException(status_code=403, detail="Access denied to this session")
+                    # Session is anonymous or same user, proceed
+                    pass
+                else:
+                    # Session doesn't exist, create new one
+                    session = await policy_db.create_chat_session(user_id=user_id)
+                    session_id = session.id
 
         # Save user message
         user_message = ChatMessage(
@@ -187,11 +263,6 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
             content=request.message
         )
         await policy_db.save_chat_message(user_message)
-        
-        # ========================================
-        # MULTI-AGENT ANALYSIS
-        # Data diambil langsung dari initial_data collection
-        # ========================================
         
         # Analyze with AI using multi-agent system
         analysis_result = await ai_analyzer.analyze_policy_query(
@@ -244,64 +315,69 @@ async def analyze_policy(request: PolicyAnalysisRequest, background_tasks: Backg
             supporting_data_count=analysis_result.get('supporting_data_count', 0)
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error in policy analysis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error analyzing policy: {str(e)}")
 
+
 @api_router.get("/sessions", response_model=List[ChatSession])
-async def get_chat_sessions():
+async def get_chat_sessions(
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Get chat sessions for the current user
+    
+    - If authenticated: returns only user's sessions
+    - If not authenticated: returns empty list (to prevent data leakage)
+    """
     try:
-        logger.info("📋 Fetching chat sessions...")
-        sessions = await policy_db.get_chat_sessions(limit=20)
-        logger.info(f"✓ Found {len(sessions)} sessions")
+        user_id = current_user.get("user_id") if current_user else None
+        
+        if not user_id:
+            # Not authenticated - return empty list
+            # This prevents anonymous users from seeing any sessions
+            logger.info("📋 Anonymous user requesting sessions - returning empty list")
+            return []
+        
+        logger.info(f"📋 Fetching sessions for user {user_id}...")
+        sessions = await policy_db.get_chat_sessions(limit=20, user_id=user_id)
+        logger.info(f"✓ Found {len(sessions)} sessions for user {user_id}")
         return sessions
     except Exception as e:
         logger.error(f"❌ Error fetching sessions: {e}")
         raise HTTPException(status_code=500, detail="Error fetching sessions")
 
-@api_router.delete("/sessions/all")
-async def delete_all_sessions():
-    try:
-        count = await policy_db.delete_all_chat_sessions()
-        logger.info(f"Deleted all sessions: {count}")
-        return {"message": f"Successfully deleted {count} sessions", "count": count}
-    except Exception as e:
-        logger.error(f"Error deleting all sessions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete all sessions")
-    
-class BulkDeleteRequest(BaseModel):
-    session_ids: List[str]
-
-@api_router.delete("/sessions/batch")
-async def delete_multiple_sessions(request: BulkDeleteRequest):
-    try:
-        count = await policy_db.delete_chat_sessions(request.session_ids)
-        logger.info(f"Deleted {count} sessions")
-        return {"message": f"Successfully deleted {count} sessions", "count": count}
-    except Exception as e:
-        logger.error(f"Error deleting multiple sessions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete sessions")
-
-@api_router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
-    try:
-        success = await policy_db.delete_chat_session(session_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return {"message": "Session deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete session")
 
 @api_router.get("/sessions/{session_id}", response_model=ChatSession)
-async def get_chat_session(session_id: str):
+async def get_chat_session(
+    session_id: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Get a specific chat session by ID
+    
+    - Verifies user has access to the session
+    """
     try:
-        logger.info(f"📋 Fetching session: {session_id}")
+        user_id = current_user.get("user_id") if current_user else None
+        logger.info(f"📋 Fetching session {session_id} for user {user_id or 'anonymous'}")
+        
+        # First, get the session without user filter to check ownership
         session = await policy_db.get_chat_session(session_id)
+        
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Check access rights
+        if session.user_id:
+            # Session belongs to a user
+            if session.user_id != user_id:
+                # Different user trying to access
+                raise HTTPException(status_code=403, detail="Access denied to this session")
+        # If session.user_id is None, it's an anonymous session - allow access for backwards compatibility
+        
         logger.info(f"✓ Session found with {len(session.messages)} messages")
         return session
     except HTTPException:
@@ -310,53 +386,103 @@ async def get_chat_session(session_id: str):
         logger.error(f"❌ Error fetching session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Error fetching session")
 
-@api_router.post("/scrape/trigger")
-async def trigger_scraping(background_tasks: BackgroundTasks):
-    """Deprecated - data is now from initial_data collection"""
-    return {
-        "message": "Scraping is deprecated. Using initial_data collection.",
-        "status": "not_needed"
-    }
 
-@api_router.get("/data/recent", response_model=List[ScrapedData])
-async def get_recent_data(limit: int = 50, category: Optional[str] = None):
+@api_router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Delete a specific chat session
+    
+    - Verifies user owns the session before deleting
+    """
     try:
-        data = await policy_db.get_recent_scraped_data(limit=limit, category=category)
-        return data
-    except Exception as e:
-        logger.error(f"Error fetching recent data: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching data")
-
-@api_router.get("/data/search", response_model=List[ScrapedData])
-async def search_data(query: str, limit: int = 50):
-    try:
-        data = await policy_db.search_scraped_data(query, limit=limit)
-        return data
-    except Exception as e:
-        logger.error(f"Error searching data: {e}")
-        raise HTTPException(status_code=500, detail="Error searching data")
-
-@api_router.get("/stats")
-async def get_stats():
-    try:
-        stats = await policy_db.get_database_stats()
-        stats["scraping_status"] = "deprecated"
-        stats["last_scraping"] = last_scraping_time
+        user_id = current_user.get("user_id") if current_user else None
         
-        # Add initial_data stats
-        try:
-            initial_data_count = await policy_db.db.initial_data.count_documents({})
-            stats["initial_data_count"] = initial_data_count
-        except:
-            stats["initial_data_count"] = 0
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
         
-        return stats
+        # Verify ownership and delete
+        success = await policy_db.delete_chat_session(session_id, user_id=user_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        
+        logger.info(f"✓ Deleted session {session_id} for user {user_id}")
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting stats: {e}")
-        raise HTTPException(status_code=500, detail="Error getting statistics")
+        logger.error(f"Error deleting session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete session")
+
+
+class BulkDeleteRequest(BaseModel):
+    session_ids: List[str]
+
+
+@api_router.delete("/sessions/batch")
+async def delete_multiple_sessions(
+    request: BulkDeleteRequest,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Delete multiple chat sessions at once
+    
+    - Only deletes sessions belonging to the authenticated user
+    """
+    try:
+        user_id = current_user.get("user_id") if current_user else None
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
+        
+        count = await policy_db.delete_chat_sessions(request.session_ids, user_id=user_id)
+        logger.info(f"✓ Bulk deleted {count} sessions for user {user_id}")
+        return {"message": f"Successfully deleted {count} sessions", "count": count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting multiple sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete sessions")
+
+
+@api_router.delete("/sessions/all")
+async def delete_all_sessions(
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Delete ALL chat sessions for the current user
+    
+    - Only deletes sessions belonging to the authenticated user
+    """
+    try:
+        user_id = current_user.get("user_id") if current_user else None
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
+        
+        count = await policy_db.delete_all_chat_sessions(user_id=user_id)
+        logger.info(f"✓ Deleted all {count} sessions for user {user_id}")
+        return {"message": f"Successfully deleted {count} sessions", "count": count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting all sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete all sessions")
+
+
+# ============================================
+# REPORT ENDPOINTS - WITH USER AUTHENTICATION
+# ============================================
 
 @api_router.get("/report/{session_id}/{format}")
-async def generate_report(session_id: str, format: str):
+async def generate_report(
+    session_id: str, 
+    format: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
     """
     Generate comprehensive report with visualizations and policies
     
@@ -373,10 +499,17 @@ async def generate_report(session_id: str, format: str):
                 detail="Format must be 'pdf', 'docx', or 'html'"
             )
         
-        # Get session with all messages
+        user_id = current_user.get("user_id") if current_user else None
+        
+        # Get session with access check
         session = await policy_db.get_chat_session(session_id)
+        
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Check access rights
+        if session.user_id and session.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied to this session")
         
         logger.info(f"Generating {format} report for session {session_id}")
         
@@ -425,16 +558,27 @@ async def generate_report(session_id: str, format: str):
     except Exception as e:
         logger.error(f"Error generating report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
-    
+
+
 @api_router.get("/report/{session_id}/preview")
-async def preview_report(session_id: str):
+async def preview_report(
+    session_id: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
     """
     Preview report as HTML in browser (tidak download, langsung tampil)
     """
     try:
+        user_id = current_user.get("user_id") if current_user else None
+        
         session = await policy_db.get_chat_session(session_id)
+        
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Check access rights
+        if session.user_id and session.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied to this session")
         
         html_content = report_generator.generate_html_report(session)
         
@@ -446,6 +590,57 @@ async def preview_report(session_id: str):
     except Exception as e:
         logger.error(f"Error previewing report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error previewing report: {str(e)}")
+
+
+# ============================================
+# OTHER API ENDPOINTS (NO AUTH REQUIRED)
+# ============================================
+
+@api_router.post("/scrape/trigger")
+async def trigger_scraping(background_tasks: BackgroundTasks):
+    """Deprecated - data is now from initial_data collection"""
+    return {
+        "message": "Scraping is deprecated. Using initial_data collection.",
+        "status": "not_needed"
+    }
+
+@api_router.get("/data/recent", response_model=List[ScrapedData])
+async def get_recent_data(limit: int = 50, category: Optional[str] = None):
+    try:
+        data = await policy_db.get_recent_scraped_data(limit=limit, category=category)
+        return data
+    except Exception as e:
+        logger.error(f"Error fetching recent data: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching data")
+
+@api_router.get("/data/search", response_model=List[ScrapedData])
+async def search_data(query: str, limit: int = 50):
+    try:
+        data = await policy_db.search_scraped_data(query, limit=limit)
+        return data
+    except Exception as e:
+        logger.error(f"Error searching data: {e}")
+        raise HTTPException(status_code=500, detail="Error searching data")
+
+@api_router.get("/stats")
+async def get_stats():
+    try:
+        stats = await policy_db.get_database_stats()
+        stats["scraping_status"] = "deprecated"
+        stats["last_scraping"] = last_scraping_time
+        
+        # Add initial_data stats
+        try:
+            initial_data_count = await policy_db.db.initial_data.count_documents({})
+            stats["initial_data_count"] = initial_data_count
+        except:
+            stats["initial_data_count"] = 0
+        
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        raise HTTPException(status_code=500, detail="Error getting statistics")
+
 
 # --- 9. REGISTER API ROUTER ---
 app.include_router(api_router)
