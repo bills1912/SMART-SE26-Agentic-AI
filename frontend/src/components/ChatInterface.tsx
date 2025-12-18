@@ -33,15 +33,13 @@ const ChatInterface: React.FC = () => {
   const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLongLoading, setIsLongLoading] = useState(false);
-  
-  // Track jika sedang dalam proses switching untuk mencegah race condition
-  const [isSwitching, setIsSwitching] = useState(false);
-  const switchingRef = useRef(false);
-  const lastSessionIdRef = useRef<string | undefined>(undefined);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Track last processed sessionId to prevent duplicate processing
+  const lastProcessedIdRef = useRef<string | undefined>(undefined);
 
   // Determine if this is a new chat (no sessionId in URL)
   const isNewChat = !sessionId;
@@ -49,34 +47,42 @@ const ChatInterface: React.FC = () => {
   // Get current session ID as string for comparison
   const currentSessionId = currentSession?.id ? String(currentSession.id) : "";
 
-  // Calculate if we're waiting for session data
+  // =============================================
+  // FIX: Simplified loading state calculation
+  // =============================================
+  // Only show loading when:
+  // 1. Context is loading AND we have a sessionId in URL
+  // 2. AND current session doesn't match the URL sessionId yet
   const isSessionLoading = 
-    isSwitching || 
-    (!!sessionId && isContextLoading) ||
-    (!!sessionId && currentSessionId !== sessionId && !isNewChat);
+    isContextLoading && 
+    !!sessionId && 
+    currentSessionId !== sessionId;
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[ChatInterface] State:', {
+      sessionId,
+      currentSessionId,
+      isContextLoading,
+      isSessionLoading,
+      isNewChat,
+      hasMessages: currentSession?.messages?.length || 0
+    });
+  }, [sessionId, currentSessionId, isContextLoading, isSessionLoading, isNewChat, currentSession]);
 
   // --- EFFECT: Handle URL changes and session switching ---
   useEffect(() => {
+    // Skip if we already processed this sessionId
+    if (lastProcessedIdRef.current === (sessionId || 'new')) {
+      return;
+    }
+
     const handleSessionChange = async () => {
-      // Prevent concurrent switches
-      if (switchingRef.current) {
-        console.log("[ChatInterface] Switch already in progress, skipping");
-        return;
-      }
-
-      // Skip if URL hasn't actually changed
-      if (lastSessionIdRef.current === sessionId) {
-        return;
-      }
-
-      lastSessionIdRef.current = sessionId;
-
       if (sessionId) {
         // URL has sessionId - switch to that session
         if (currentSessionId !== sessionId) {
           console.log(`[ChatInterface] Switching to session: ${sessionId}`);
-          switchingRef.current = true;
-          setIsSwitching(true);
+          lastProcessedIdRef.current = sessionId;
           
           try {
             await switchToSession(sessionId);
@@ -87,40 +93,30 @@ const ChatInterface: React.FC = () => {
               description: "Gagal memuat sesi percakapan",
               variant: "destructive",
             });
-          } finally {
-            switchingRef.current = false;
-            setIsSwitching(false);
+            // On error, go back to dashboard
+            navigate('/dashboard', { replace: true });
           }
+        } else {
+          // Already on correct session
+          lastProcessedIdRef.current = sessionId;
         }
       } else {
         // No sessionId in URL - create new chat
         console.log("[ChatInterface] Creating new chat (dashboard)");
-        switchingRef.current = true;
-        setIsSwitching(true);
-        
-        try {
-          createNewChat();
-          setInputMessage("");
-          setIsLoading(false);
-        } finally {
-          // Small delay to ensure state is updated
-          setTimeout(() => {
-            switchingRef.current = false;
-            setIsSwitching(false);
-          }, 100);
-        }
+        lastProcessedIdRef.current = 'new';
+        createNewChat();
+        setInputMessage("");
+        setIsLoading(false);
       }
     };
 
     handleSessionChange();
-  }, [sessionId]); // Only depend on sessionId URL param
+  }, [sessionId, currentSessionId, switchToSession, createNewChat, navigate]);
 
   // --- Handle New Chat button click ---
   const handleNewChat = useCallback(() => {
-    if (switchingRef.current) return;
-    
     console.log("[ChatInterface] New chat button clicked");
-    lastSessionIdRef.current = undefined;
+    lastProcessedIdRef.current = 'new';
     createNewChat();
     setInputMessage("");
     setIsLoading(false);
@@ -128,12 +124,7 @@ const ChatInterface: React.FC = () => {
   }, [createNewChat, navigate]);
 
   // --- Handle Session Switch from Sidebar ---
-  const handleSwitchSession = useCallback(async (targetSessionId: string) => {
-    if (switchingRef.current) {
-      console.log("[ChatInterface] Switch blocked - already switching");
-      return;
-    }
-    
+  const handleSwitchSession = useCallback((targetSessionId: string) => {
     if (currentSessionId === targetSessionId) {
       console.log("[ChatInterface] Already on this session");
       setSidebarOpen(false);
@@ -141,7 +132,8 @@ const ChatInterface: React.FC = () => {
     }
 
     console.log(`[ChatInterface] Manual switch to: ${targetSessionId}`);
-    lastSessionIdRef.current = targetSessionId;
+    // Don't set lastProcessedIdRef here - let the useEffect handle it
+    // This ensures proper state flow
     navigate(`/c/${targetSessionId}`, { replace: true });
     setSidebarOpen(false);
   }, [currentSessionId, navigate]);
@@ -307,7 +299,7 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading || switchingRef.current) return;
+    if (!inputMessage.trim() || isLoading) return;
 
     const activeSessionId = currentSession?.id || "";
 
@@ -337,7 +329,7 @@ const ChatInterface: React.FC = () => {
 
       // If this is a new chat, navigate to the new session URL
       if (!sessionId && response.session_id) {
-        lastSessionIdRef.current = response.session_id;
+        lastProcessedIdRef.current = response.session_id;
         navigate(`/c/${response.session_id}`, { replace: true });
       }
 
@@ -398,7 +390,7 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  // Loading State UI
+  // Loading State UI - Only show when actually loading session data
   if (isSessionLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 flex-col px-4">

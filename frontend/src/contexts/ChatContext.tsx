@@ -37,9 +37,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Ref to track if we're currently switching sessions
-  const switchingRef = useRef(false);
+  // Refs to prevent race conditions
   const loadingHistoryRef = useRef(false);
+  const currentSwitchRef = useRef<string | null>(null);
 
   // Load chat history on initialization
   useEffect(() => {
@@ -78,9 +78,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const createNewChat = useCallback(() => {
     console.log('[ChatContext] Creating new chat');
     
-    // Reset loading state
+    // IMPORTANT: Reset all loading states
     setIsLoading(false);
-    switchingRef.current = false;
+    currentSwitchRef.current = null;
     
     const newSession: ChatSession = {
       id: '',
@@ -95,44 +95,47 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   }, []);
 
   const switchToSession = useCallback(async (sessionId: string): Promise<void> => {
-    // Prevent concurrent switches
-    if (switchingRef.current) {
-      console.log('[ChatContext] Switch already in progress, queueing...');
-      // Wait a bit and retry
-      await new Promise(resolve => setTimeout(resolve, 100));
-      if (switchingRef.current) {
-        console.log('[ChatContext] Still switching, aborting');
-        return;
-      }
-    }
-    
     const normalizedId = String(sessionId);
     
-    // Check if already on this session
-    if (currentSession && String(currentSession.id) === normalizedId) {
-      console.log('[ChatContext] Already on session:', normalizedId);
+    // If already switching to this session, skip
+    if (currentSwitchRef.current === normalizedId) {
+      console.log('[ChatContext] Already switching to this session, skipping');
+      return;
+    }
+    
+    // If already on this session with data, skip
+    if (currentSession && String(currentSession.id) === normalizedId && currentSession.messages?.length > 0) {
+      console.log('[ChatContext] Already on session with data:', normalizedId);
+      setIsLoading(false); // Make sure loading is false
       return;
     }
     
     console.log(`[ChatContext] Switching to session: ${normalizedId}`);
-    switchingRef.current = true;
+    currentSwitchRef.current = normalizedId;
     setIsLoading(true);
     
     try {
-      // Optimistic update: Check if session exists in cache
+      // Optimistic update: Check if session exists in cache with messages
       const cachedSession = sessions.find(s => String(s.id) === normalizedId);
       
       if (cachedSession && cachedSession.messages && cachedSession.messages.length > 0) {
-        console.log('[ChatContext] Using cached session data');
+        console.log('[ChatContext] Using cached session data first');
         setCurrentSession({
           ...cachedSession,
           id: normalizedId
         });
+        // Don't return - still fetch fresh data, but UI will show cached data
       }
 
       // Fetch fresh data from API
       console.log('[ChatContext] Fetching session from API...');
       const session = await apiService.getSession(sessionId);
+      
+      // Check if we're still supposed to be on this session
+      if (currentSwitchRef.current !== normalizedId) {
+        console.log('[ChatContext] Session switch cancelled - different session requested');
+        return;
+      }
       
       // Normalize the session ID
       const normalizedSession: ChatSession = {
@@ -147,8 +150,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       console.error('[ChatContext] Failed to switch to session:', error);
       throw error;
     } finally {
-      setIsLoading(false);
-      switchingRef.current = false;
+      // IMPORTANT: Always reset loading state
+      if (currentSwitchRef.current === normalizedId) {
+        setIsLoading(false);
+        currentSwitchRef.current = null;
+      }
     }
   }, [currentSession, sessions]);
 
