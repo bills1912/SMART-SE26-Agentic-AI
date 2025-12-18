@@ -23,7 +23,7 @@ const CollapsedSidebar: React.FC<CollapsedSidebarProps> = ({
       >
         <BrandLogo size="md" showText={false} />
         
-        {/* Expand Icon on Hover - appears next to logo */}
+        {/* Expand Icon on Hover */}
         <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 flex items-center gap-2">
           <span>Expand Sidebar</span>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

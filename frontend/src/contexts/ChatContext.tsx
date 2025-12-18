@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { ChatSession, ChatMessage } from '../types/chat';
 import apiService from '../services/api';
 
@@ -7,7 +7,7 @@ interface ChatContextType {
   sessions: ChatSession[];
   isLoading: boolean;
   createNewChat: () => void;
-  switchToSession: (sessionId: string) => void;
+  switchToSession: (sessionId: string) => Promise<void>;
   exportCurrentChat: () => void;
   exportAllChats: () => void;
   loadChatHistory: () => Promise<void>;
@@ -36,39 +36,51 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Ref to track if we're currently switching sessions
+  const switchingRef = useRef(false);
+  const loadingHistoryRef = useRef(false);
 
   // Load chat history on initialization
   useEffect(() => {
     loadChatHistory();
   }, []);
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = useCallback(async () => {
+    // Prevent duplicate loading
+    if (loadingHistoryRef.current) {
+      console.log('[ChatContext] Already loading history, skipping');
+      return;
+    }
+    
+    loadingHistoryRef.current = true;
+    
     try {
-      // Note: Kita tidak set isLoading(true) global di sini agar tidak memblokir UI utama
-      // saat sidebar sedang memuat list history.
+      console.log('[ChatContext] Loading chat history...');
       const chatSessions = await apiService.getSessions();
       
-      // FIX: Normalisasi ID menjadi String untuk konsistensi dengan URL
+      // Normalize IDs to String for consistency
       const normalizedSessions = chatSessions.map(s => ({
         ...s,
         id: String(s.id)
       }));
       
       setSessions(normalizedSessions);
-      
-      // PERBAIKAN PENTING:
-      // Jangan panggil createNewChat() di sini! 
-      // Biarkan Router (ChatInterface) yang menentukan apakah harus load sesi tertentu atau buat baru.
-      // Jika dipaksa createNewChat(), ini akan menimpa proses switchToSession yang sedang berjalan.
+      console.log(`[ChatContext] Loaded ${normalizedSessions.length} sessions`);
       
     } catch (error) {
-      console.error('Failed to load chat history:', error);
+      console.error('[ChatContext] Failed to load chat history:', error);
+    } finally {
+      loadingHistoryRef.current = false;
     }
-  };
+  }, []);
 
-  const createNewChat = () => {
-    // Reset state loading agar tidak nyangkut
+  const createNewChat = useCallback(() => {
+    console.log('[ChatContext] Creating new chat');
+    
+    // Reset loading state
     setIsLoading(false);
+    switchingRef.current = false;
     
     const newSession: ChatSession = {
       id: '',
@@ -80,137 +92,162 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     };
     
     setCurrentSession(newSession);
-  };
+  }, []);
 
-  const switchToSession = async (sessionId: string) => {
+  const switchToSession = useCallback(async (sessionId: string): Promise<void> => {
+    // Prevent concurrent switches
+    if (switchingRef.current) {
+      console.log('[ChatContext] Switch already in progress, queueing...');
+      // Wait a bit and retry
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (switchingRef.current) {
+        console.log('[ChatContext] Still switching, aborting');
+        return;
+      }
+    }
+    
+    const normalizedId = String(sessionId);
+    
+    // Check if already on this session
+    if (currentSession && String(currentSession.id) === normalizedId) {
+      console.log('[ChatContext] Already on session:', normalizedId);
+      return;
+    }
+    
+    console.log(`[ChatContext] Switching to session: ${normalizedId}`);
+    switchingRef.current = true;
+    setIsLoading(true);
+    
     try {
-      setIsLoading(true);
+      // Optimistic update: Check if session exists in cache
+      const cachedSession = sessions.find(s => String(s.id) === normalizedId);
       
-      // Optimistic Update: Cek apakah sesi sudah ada di list sessions
-      // Gunakan String() untuk perbandingan yang aman (Number vs String)
-      const existingSession = sessions.find(s => String(s.id) === String(sessionId));
-      
-      if (existingSession && existingSession.messages && existingSession.messages.length > 0) {
-         // Jika ada di cache, tampilkan dulu agar cepat
-         setCurrentSession(existingSession);
+      if (cachedSession && cachedSession.messages && cachedSession.messages.length > 0) {
+        console.log('[ChatContext] Using cached session data');
+        setCurrentSession({
+          ...cachedSession,
+          id: normalizedId
+        });
       }
 
       // Fetch fresh data from API
+      console.log('[ChatContext] Fetching session from API...');
       const session = await apiService.getSession(sessionId);
       
-      // FIX: Paksa konversi ID ke String agar cocok dengan URL params
-      const normalizedSession = {
+      // Normalize the session ID
+      const normalizedSession: ChatSession = {
         ...session,
         id: String(session.id)
       };
 
+      console.log(`[ChatContext] Session loaded with ${normalizedSession.messages?.length || 0} messages`);
       setCurrentSession(normalizedSession);
+      
     } catch (error) {
-      console.error('Failed to switch to session:', error);
-      // Jangan reset ke createNewChat() di sini, biarkan UI menangani error state
+      console.error('[ChatContext] Failed to switch to session:', error);
+      throw error;
     } finally {
       setIsLoading(false);
+      switchingRef.current = false;
     }
-  };
+  }, [currentSession, sessions]);
 
-  const addMessageToCurrentSession = (message: ChatMessage) => {
-    if (currentSession) {
-      setCurrentSession(prevSession => {
-        if (!prevSession) return prevSession;
-        
-        const updatedSession = {
-          ...prevSession,
-          messages: [...prevSession.messages, message],
-          updated_at: new Date().toISOString()
-        };
-        
-        // Update session ID if it was empty (new session)
-        if (!prevSession.id && message.session_id) {
-          updatedSession.id = String(message.session_id); // FIX: Ensure String
-          updatedSession.title = generateSessionTitle(message.content);
-        }
-        
-        return updatedSession;
-      });
+  const addMessageToCurrentSession = useCallback((message: ChatMessage) => {
+    setCurrentSession(prevSession => {
+      if (!prevSession) {
+        console.warn('[ChatContext] No current session to add message to');
+        return prevSession;
+      }
       
-      // Update sessions list (Sidebar) secara real-time
-      setSessions(prevSessions => {
-        const sessionId = currentSession.id 
-          ? String(currentSession.id) 
-          : (message.session_id ? String(message.session_id) : '');
-          
-        if (!sessionId) return prevSessions;
+      const updatedSession: ChatSession = {
+        ...prevSession,
+        messages: [...prevSession.messages, message],
+        updated_at: new Date().toISOString()
+      };
+      
+      // Update session ID if it was empty (new session)
+      if (!prevSession.id && message.session_id) {
+        updatedSession.id = String(message.session_id);
+        updatedSession.title = generateSessionTitle(message.content);
+      }
+      
+      return updatedSession;
+    });
+    
+    // Update sessions list (Sidebar)
+    setSessions(prevSessions => {
+      const sessionId = currentSession?.id 
+        ? String(currentSession.id) 
+        : (message.session_id ? String(message.session_id) : '');
         
-        const existingIndex = prevSessions.findIndex(s => String(s.id) === sessionId);
-        
-        const updatedSessionForList = {
-          ...currentSession,
-          id: sessionId,
-          messages: [...currentSession.messages, message],
-          updated_at: new Date().toISOString()
-        };
-        
-        if (!currentSession.id && message.session_id) {
-          updatedSessionForList.title = generateSessionTitle(message.content);
-        }
-        
-        if (existingIndex >= 0) {
-          const newSessions = [...prevSessions];
-          newSessions[existingIndex] = updatedSessionForList;
-          return newSessions;
-        } else {
-          return [updatedSessionForList, ...prevSessions];
-        }
-      });
-    }
-  };
+      if (!sessionId) return prevSessions;
+      
+      const existingIndex = prevSessions.findIndex(s => String(s.id) === sessionId);
+      
+      const currentMessages = currentSession?.messages || [];
+      const updatedSessionForList: ChatSession = {
+        id: sessionId,
+        title: currentSession?.title || generateSessionTitle(message.content),
+        messages: [...currentMessages, message],
+        created_at: currentSession?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: currentSession?.metadata || {}
+      };
+      
+      if (existingIndex >= 0) {
+        const newSessions = [...prevSessions];
+        newSessions[existingIndex] = updatedSessionForList;
+        return newSessions;
+      } else {
+        return [updatedSessionForList, ...prevSessions];
+      }
+    });
+  }, [currentSession]);
 
-  const updateMessageInCurrentSession = (messageId: string, newContent: string) => {
-    if (currentSession) {
-      setCurrentSession(prevSession => {
-        if (!prevSession) return prevSession;
-        
-        const updatedMessages = prevSession.messages.map(msg => 
-          msg.id === messageId 
-            ? { ...msg, content: newContent, timestamp: new Date() }
-            : msg
-        );
-        
-        return {
-          ...prevSession,
-          messages: updatedMessages,
-          updated_at: new Date().toISOString()
-        };
-      });
+  const updateMessageInCurrentSession = useCallback((messageId: string, newContent: string) => {
+    setCurrentSession(prevSession => {
+      if (!prevSession) return prevSession;
+      
+      const updatedMessages = prevSession.messages.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, content: newContent, timestamp: new Date() }
+          : msg
+      );
+      
+      return {
+        ...prevSession,
+        messages: updatedMessages,
+        updated_at: new Date().toISOString()
+      };
+    });
 
-      // Also update in sessions list
-      setSessions(prevSessions => {
-        if (!currentSession.id) return prevSessions;
-        
-        return prevSessions.map(session => {
-          if (String(session.id) === String(currentSession.id)) {
-            return {
-              ...session,
-              messages: session.messages.map(msg =>
-                msg.id === messageId
-                  ? { ...msg, content: newContent, timestamp: new Date() }
-                  : msg
-              ),
-              updated_at: new Date().toISOString()
-            };
-          }
-          return session;
-        });
+    // Also update in sessions list
+    setSessions(prevSessions => {
+      if (!currentSession?.id) return prevSessions;
+      
+      return prevSessions.map(session => {
+        if (String(session.id) === String(currentSession.id)) {
+          return {
+            ...session,
+            messages: session.messages.map(msg =>
+              msg.id === messageId
+                ? { ...msg, content: newContent, timestamp: new Date() }
+                : msg
+            ),
+            updated_at: new Date().toISOString()
+          };
+        }
+        return session;
       });
-    }
-  };
+    });
+  }, [currentSession]);
 
   const generateSessionTitle = (firstMessage: string): string => {
     const words = firstMessage.split(' ').slice(0, 6).join(' ');
     return words.length > 50 ? words.substring(0, 47) + '...' : words;
   };
 
-  const exportCurrentChat = () => {
+  const exportCurrentChat = useCallback(() => {
     if (!currentSession) return;
     
     const chatData = {
@@ -235,9 +272,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [currentSession]);
 
-  const exportAllChats = () => {
+  const exportAllChats = useCallback(() => {
     const allChatsData = {
       exportDate: new Date().toLocaleString(),
       totalSessions: sessions.length,
@@ -265,26 +302,26 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [sessions]);
 
-  const deleteSession = async (sessionId: string) => {
+  const deleteSession = useCallback(async (sessionId: string) => {
     try {
       await apiService.deleteSession(sessionId);
       
-      // Update state lokal
+      // Update local state
       setSessions(prev => prev.filter(s => String(s.id) !== String(sessionId)));
       
-      // Jika sesi yang dihapus adalah sesi aktif, reset ke new chat
+      // If deleted session is current, reset to new chat
       if (currentSession && String(currentSession.id) === String(sessionId)) {
         createNewChat();
       }
     } catch (error) {
-      console.error('Failed to delete session:', error);
+      console.error('[ChatContext] Failed to delete session:', error);
       throw error;
     }
-  };
+  }, [currentSession, createNewChat]);
 
-  const deleteMultipleSessions = async (sessionIds: string[]) => {
+  const deleteMultipleSessions = useCallback(async (sessionIds: string[]) => {
     try {
       await apiService.deleteSessions(sessionIds);
       
@@ -295,21 +332,21 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         createNewChat();
       }
     } catch (error) {
-      console.error('Failed to delete sessions:', error);
+      console.error('[ChatContext] Failed to delete sessions:', error);
       throw error;
     }
-  };
+  }, [currentSession, createNewChat]);
 
-  const deleteAllSessions = async () => {
+  const deleteAllSessions = useCallback(async () => {
     try {
       await apiService.deleteAllSessions();
       setSessions([]);
       createNewChat();
     } catch (error) {
-      console.error('Failed to delete all sessions:', error);
+      console.error('[ChatContext] Failed to delete all sessions:', error);
       throw error;
     }
-  };
+  }, [createNewChat]);
 
   return (
     <ChatContext.Provider

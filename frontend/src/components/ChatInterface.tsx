@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Bot, User, Loader2, Database, Menu, AlertCircle, ArrowLeft } from "lucide-react";
 import { ChatMessage } from "../types/chat";
 import MessageBubble from "./MessageBubble";
@@ -11,7 +11,7 @@ import VoiceRecorder from "./VoiceRecorder";
 import UserMenu from "./UserMenu";
 import NewChatWelcome from "./NewChatWelcome";
 import { useChat } from "../contexts/ChatContext";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 const ChatInterface: React.FC = () => {
   const {
@@ -20,14 +20,12 @@ const ChatInterface: React.FC = () => {
     updateMessageInCurrentSession,
     createNewChat,
     exportCurrentChat,
-    switchToSession, 
-    sessions, 
+    switchToSession,
     isLoading: isContextLoading,
   } = useChat();
 
-  const { sessionId } = useParams();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -35,57 +33,118 @@ const ChatInterface: React.FC = () => {
   const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLongLoading, setIsLongLoading] = useState(false);
+  
+  // Track jika sedang dalam proses switching untuk mencegah race condition
+  const [isSwitching, setIsSwitching] = useState(false);
+  const switchingRef = useRef(false);
+  const lastSessionIdRef = useRef<string | undefined>(undefined);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
 
-  // --- LOGIC PERBAIKAN UTAMA ---
-
-  // 1. Tentukan apakah ini Mode New Chat (Dashboard)
-  // Dashboard = tidak ada sessionId di URL
+  // Determine if this is a new chat (no sessionId in URL)
   const isNewChat = !sessionId;
 
-  // 2. Logic Loading yang lebih stabil & Tipe Data Aman (String vs Number)
-  // Kita konversi ke String agar aman saat membandingkan
-  const currentIdString = currentSession?.id ? String(currentSession.id) : "";
-  const isIdMismatch = sessionId && currentSession && currentIdString !== sessionId;
-  
-  // Jika tidak ada currentSession tapi ada sessionId, berarti belum fetch -> Loading
-  const isWaitingForSession = !!sessionId && !currentSession;
+  // Get current session ID as string for comparison
+  const currentSessionId = currentSession?.id ? String(currentSession.id) : "";
 
-  const isSessionLoading = isWaitingForSession || isIdMismatch || (!!sessionId && isContextLoading);
+  // Calculate if we're waiting for session data
+  const isSessionLoading = 
+    isSwitching || 
+    (!!sessionId && isContextLoading) ||
+    (!!sessionId && currentSessionId !== sessionId && !isNewChat);
 
-  // --- FIX 1: HANDLE SWITCH SESSION (HISTORY) ---
-  // Dependency array HANYA [sessionId]. 
-  // Kita buang [currentSession] agar tidak loop saat data terupdate.
+  // --- EFFECT: Handle URL changes and session switching ---
   useEffect(() => {
-    if (sessionId) {
-      // Cek apakah perlu switch? Gunakan string comparison
-      if (currentIdString !== sessionId) {
-        // PERBAIKAN: Gunakan try-catch biasa, jangan .catch() karena tipe void
+    const handleSessionChange = async () => {
+      // Prevent concurrent switches
+      if (switchingRef.current) {
+        console.log("[ChatInterface] Switch already in progress, skipping");
+        return;
+      }
+
+      // Skip if URL hasn't actually changed
+      if (lastSessionIdRef.current === sessionId) {
+        return;
+      }
+
+      lastSessionIdRef.current = sessionId;
+
+      if (sessionId) {
+        // URL has sessionId - switch to that session
+        if (currentSessionId !== sessionId) {
+          console.log(`[ChatInterface] Switching to session: ${sessionId}`);
+          switchingRef.current = true;
+          setIsSwitching(true);
+          
+          try {
+            await switchToSession(sessionId);
+          } catch (error) {
+            console.error("[ChatInterface] Failed to switch session:", error);
+            toast({
+              title: "Error",
+              description: "Gagal memuat sesi percakapan",
+              variant: "destructive",
+            });
+          } finally {
+            switchingRef.current = false;
+            setIsSwitching(false);
+          }
+        }
+      } else {
+        // No sessionId in URL - create new chat
+        console.log("[ChatInterface] Creating new chat (dashboard)");
+        switchingRef.current = true;
+        setIsSwitching(true);
+        
         try {
-          switchToSession(sessionId);
-        } catch (error) {
-          console.error("Failed to switch session:", error);
+          createNewChat();
+          setInputMessage("");
+          setIsLoading(false);
+        } finally {
+          // Small delay to ensure state is updated
+          setTimeout(() => {
+            switchingRef.current = false;
+            setIsSwitching(false);
+          }, 100);
         }
       }
-    }
-  }, [sessionId]); // HANYA bereaksi jika URL berubah
+    };
 
-  // --- FIX 2: HANDLE NEW CHAT (DASHBOARD) ---
-  // Jalankan ketika URL tidak punya ID (masuk Dashboard).
-  useEffect(() => {
-    if (!sessionId) {
-      // Selalu pastikan kita membuat sesi baru yang bersih
-      // Walaupun currentSession sudah kosong, tidak apa-apa panggil lagi untuk memastikan UI reset.
-      createNewChat();
-      setInputMessage(""); // Reset input text
-      setIsLoading(false); // Reset loading state
-    }
-  }, [sessionId]); // Hanya jalan jika status URL (ada/tidaknya ID) berubah
+    handleSessionChange();
+  }, [sessionId]); // Only depend on sessionId URL param
 
-  // -----------------------------
+  // --- Handle New Chat button click ---
+  const handleNewChat = useCallback(() => {
+    if (switchingRef.current) return;
+    
+    console.log("[ChatInterface] New chat button clicked");
+    lastSessionIdRef.current = undefined;
+    createNewChat();
+    setInputMessage("");
+    setIsLoading(false);
+    navigate("/dashboard", { replace: true });
+  }, [createNewChat, navigate]);
+
+  // --- Handle Session Switch from Sidebar ---
+  const handleSwitchSession = useCallback(async (targetSessionId: string) => {
+    if (switchingRef.current) {
+      console.log("[ChatInterface] Switch blocked - already switching");
+      return;
+    }
+    
+    if (currentSessionId === targetSessionId) {
+      console.log("[ChatInterface] Already on this session");
+      setSidebarOpen(false);
+      return;
+    }
+
+    console.log(`[ChatInterface] Manual switch to: ${targetSessionId}`);
+    lastSessionIdRef.current = targetSessionId;
+    navigate(`/c/${targetSessionId}`, { replace: true });
+    setSidebarOpen(false);
+  }, [currentSessionId, navigate]);
 
   const handleVoiceTranscript = (transcript: string) => {
     if (transcript.trim()) {
@@ -109,7 +168,7 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  // Safety Timeout: Jika loading stuck > 5 detik
+  // Safety Timeout: If loading stuck > 5 seconds
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     if (isSessionLoading) {
@@ -129,6 +188,7 @@ const ChatInterface: React.FC = () => {
     }
   }, [realMessages.length]);
 
+  // Check backend status on mount
   useEffect(() => {
     checkBackendStatus();
   }, []);
@@ -247,9 +307,8 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim() || isLoading || switchingRef.current) return;
 
-    // Ambil ID sesi saat ini, atau string kosong jika ini chat baru
     const activeSessionId = currentSession?.id || "";
 
     const userMessage: ChatMessage = {
@@ -276,10 +335,9 @@ const ChatInterface: React.FC = () => {
         activeSessionId
       );
 
-      // JIKA ini adalah pesan pertama di Chat Baru (New Chat),
-      // Maka backend akan membuatkan ID baru. Kita HARUS pindah URL ke ID tersebut
-      // agar sesi tersimpan dan tidak hilang saat refresh.
+      // If this is a new chat, navigate to the new session URL
       if (!sessionId && response.session_id) {
+        lastSessionIdRef.current = response.session_id;
         navigate(`/c/${response.session_id}`, { replace: true });
       }
 
@@ -340,7 +398,7 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  // Tampilan Loading (Hanya muncul jika sedang fetch sesi history)
+  // Loading State UI
   if (isSessionLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 flex-col px-4">
@@ -358,21 +416,18 @@ const ChatInterface: React.FC = () => {
 
         {isLongLoading && (
           <div className="flex flex-col gap-3 items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-lg border border-amber-200 dark:border-amber-800 text-sm mb-2">
-                <AlertCircle className="h-4 w-4" />
-                <span>Koneksi atau ID sesi mungkin bermasalah.</span>
-             </div>
-             
-             <button 
-                onClick={() => {
-                   createNewChat();
-                   navigate('/dashboard');
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors shadow-sm"
-             >
-                <ArrowLeft className="h-4 w-4" />
-                Kembali ke Dashboard & Buat Chat Baru
-             </button>
+            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-lg border border-amber-200 dark:border-amber-800 text-sm mb-2">
+              <AlertCircle className="h-4 w-4" />
+              <span>Koneksi atau ID sesi mungkin bermasalah.</span>
+            </div>
+
+            <button
+              onClick={handleNewChat}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Kembali ke Dashboard & Buat Chat Baru
+            </button>
           </div>
         )}
       </div>
@@ -381,13 +436,15 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-      {/* Chat Sidebar - Overlay on mobile, fixed on desktop */}
+      {/* Chat Sidebar */}
       <ChatSidebar
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onSwitchSession={handleSwitchSession}
+        onNewChat={handleNewChat}
       />
 
-      {/* Backdrop blur for mobile when sidebar open */}
+      {/* Backdrop for mobile */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
@@ -395,14 +452,11 @@ const ChatInterface: React.FC = () => {
         />
       )}
 
-      {/* Collapsed Sidebar - Icons only when sidebar closed - DESKTOP ONLY */}
+      {/* Collapsed Sidebar - Desktop only */}
       {!sidebarOpen && (
         <div className="hidden lg:block">
           <CollapsedSidebar
-            onNewChat={() => {
-              createNewChat();
-              navigate("/dashboard");
-            }}
+            onNewChat={handleNewChat}
             onShowHistory={() => setSidebarOpen(true)}
             onExport={exportCurrentChat}
           />
@@ -415,6 +469,7 @@ const ChatInterface: React.FC = () => {
           sidebarOpen ? "lg:ml-80" : "lg:ml-16"
         }`}
       >
+        {/* Header */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-3 py-1 sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
@@ -441,6 +496,7 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
 
+        {/* Main Content */}
         {isNewChat ? (
           <div className="flex flex-col justify-center min-h-[calc(100vh-60px)]">
             <NewChatWelcome
@@ -484,19 +540,10 @@ const ChatInterface: React.FC = () => {
           </div>
         )}
 
+        {/* Input Area - Only show when not new chat */}
         {!isNewChat && (
-          <div
-            className={`sticky bottom-0 pb-4 transition-all duration-500 ${
-              isNewChat
-                ? "bg-transparent pt-3"
-                : "bg-gradient-to-t from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4"
-            }`}
-          >
-            <div
-              className={`mx-auto px-4 transition-all duration-500 ${
-                isNewChat ? "max-w-2xl" : "max-w-4xl"
-              }`}
-            >
+          <div className="sticky bottom-0 pb-4 bg-gradient-to-t from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4">
+            <div className="mx-auto px-4 max-w-4xl">
               <div className="border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 dark:focus-within:ring-orange-400 transition-all duration-200">
                 <div className="relative">
                   <textarea
