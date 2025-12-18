@@ -249,8 +249,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('[Auth] Initiating Google OAuth...');
     
     // Get backend URL
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 
-                       (import.meta as any).env.REACT_APP_BACKEND_URL || 
+    const backendUrl = process.env.VITE_BACKEND_URL || 
+                       process.env.REACT_APP_BACKEND_URL || 
                        window.location.origin;
     
     // Redirect to backend Google OAuth endpoint

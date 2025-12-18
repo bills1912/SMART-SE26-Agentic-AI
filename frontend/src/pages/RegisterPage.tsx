@@ -55,8 +55,8 @@ const RegisterPage: React.FC = () => {
   const handleGoogleOAuth = () => {
     // Redirect ke backend Google OAuth endpoint
     // Backend akan handle redirect ke Google dan callback
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 
-                       (import.meta as any).env.REACT_APP_BACKEND_URL || 
+    const backendUrl = process.env.VITE_BACKEND_URL || 
+                       process.env.REACT_APP_BACKEND_URL || 
                        window.location.origin;
     
     // Redirect langsung ke backend endpoint
