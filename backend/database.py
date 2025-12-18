@@ -242,11 +242,17 @@ class PolicyDatabase:
             # Build query based on user_id
             query = {}
             if user_id:
+                # User is authenticated - get only their sessions
                 query["user_id"] = user_id
             else:
-                # For backwards compatibility: if no user_id, only return sessions without user_id
-                # This prevents leaking other users' sessions
-                query["user_id"] = {"$exists": False}
+                # Anonymous user - get sessions that have no user_id OR user_id is null
+                # This handles both:
+                # - Old sessions without user_id field
+                # - Sessions created with user_id: null
+                query["$or"] = [
+                    {"user_id": {"$exists": False}},
+                    {"user_id": None}
+                ]
             
             cursor = self.db.chat_sessions.find(query).sort("updated_at", -1).limit(limit)
             sessions_data = await cursor.to_list(length=limit)

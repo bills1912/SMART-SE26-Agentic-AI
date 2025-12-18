@@ -101,6 +101,17 @@ async def get_current_user_from_request(request: Request) -> Optional[dict]:
     to avoid issues with FastAPI's dependency system in certain contexts.
     """
     try:
+        # Debug: Log request info
+        cookies = dict(request.cookies)
+        session_cookie = cookies.get("session_token")
+        auth_header = request.headers.get("Authorization")
+        
+        logger.info(f"[Auth Debug] Cookies count: {len(cookies)}")
+        logger.info(f"[Auth Debug] Has session_token cookie: {session_cookie is not None}")
+        if session_cookie:
+            logger.info(f"[Auth Debug] Session token preview: {session_cookie[:30]}...")
+        logger.info(f"[Auth Debug] Has Authorization header: {auth_header is not None}")
+        
         # Create AuthService with the database
         auth_service = AuthService(policy_db.db)
         
@@ -114,13 +125,15 @@ async def get_current_user_from_request(request: Request) -> Optional[dict]:
                 "email": user.email, 
                 "name": user.name
             }
+        
+        logger.warning("[Auth Debug] authenticate_user returned None")
         return None
         
     except HTTPException as e:
-        logger.debug(f"Auth check returned HTTPException: {e.status_code} - {e.detail}")
+        logger.warning(f"[Auth Debug] HTTPException: {e.status_code} - {e.detail}")
         return None
     except Exception as e:
-        logger.debug(f"Auth check failed with exception: {e}")
+        logger.error(f"[Auth Debug] Exception: {type(e).__name__}: {e}")
         return None
 
 
@@ -639,6 +652,63 @@ async def debug_auth(request: Request):
             "authenticated": False,
             "user": None,
             "error": str(e)
+        }
+
+
+@api_router.get("/debug/sessions")
+async def debug_sessions(request: Request):
+    """
+    Debug endpoint to see what sessions exist for the current user
+    """
+    try:
+        current_user = await get_current_user_from_request(request)
+        user_id = current_user.get("user_id") if current_user else None
+        
+        # Get sessions for this user
+        user_sessions = await policy_db.get_chat_sessions(limit=50, user_id=user_id)
+        
+        # Also get raw count from database
+        if user_id:
+            raw_count = await policy_db.db.chat_sessions.count_documents({"user_id": user_id})
+        else:
+            raw_count = await policy_db.db.chat_sessions.count_documents({
+                "$or": [
+                    {"user_id": {"$exists": False}},
+                    {"user_id": None}
+                ]
+            })
+        
+        # Get total sessions in database
+        total_sessions = await policy_db.db.chat_sessions.count_documents({})
+        
+        # Get sample of all sessions to see user_id distribution
+        sample_sessions = await policy_db.db.chat_sessions.find(
+            {}, 
+            {"id": 1, "user_id": 1, "title": 1, "_id": 0}
+        ).limit(10).to_list(length=10)
+        
+        return {
+            "current_user": current_user,
+            "query_user_id": user_id,
+            "sessions_found": len(user_sessions),
+            "raw_db_count": raw_count,
+            "total_sessions_in_db": total_sessions,
+            "sessions": [
+                {
+                    "id": s.id,
+                    "user_id": s.user_id,
+                    "title": s.title,
+                    "message_count": len(s.messages) if s.messages else 0
+                }
+                for s in user_sessions
+            ],
+            "sample_all_sessions": sample_sessions
+        }
+    except Exception as e:
+        logger.error(f"Debug sessions error: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "current_user": None
         }
 
 
