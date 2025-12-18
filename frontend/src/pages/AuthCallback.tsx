@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 // Storage keys (harus sama dengan AuthContext)
 const USER_CACHE_KEY = 'se26_user_cache';
@@ -36,6 +37,7 @@ const AuthCallback: React.FC = () => {
         const userId = params.get('user_id');
         const email = params.get('email');
         const name = params.get('name');
+        const picture = params.get('picture');
 
         console.log('[AuthCallback] Received OAuth data:', { 
           hasToken: !!sessionToken, 
@@ -56,31 +58,53 @@ const AuthCallback: React.FC = () => {
         // Construct user object
         const user = {
           user_id: userId || '',
-          email: email,
-          name: name || email.split('@')[0],
-          picture: null // Will be updated on next /auth/me call
+          email: decodeURIComponent(email),
+          name: name ? decodeURIComponent(name) : email.split('@')[0],
+          picture: picture ? decodeURIComponent(picture) : null
         };
 
-        // Save user to localStorage
+        // Save user to localStorage FIRST
         localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
         localStorage.setItem(AUTH_STATUS_KEY, 'authenticated');
         localStorage.setItem(AUTH_TIMESTAMP_KEY, Date.now().toString());
         
-        console.log('[AuthCallback] User cached to localStorage');
+        console.log('[AuthCallback] User cached to localStorage:', user.email);
 
-        // Set flag untuk skip delay di AuthContext
+        // Set flags untuk AuthContext
         sessionStorage.setItem('just_authenticated', 'true');
+        sessionStorage.setItem('oauth_session_token', sessionToken);
         
-        setStatus('Redirecting to dashboard...');
+        setStatus('Verifying session...');
 
-        // Small delay to ensure localStorage is written
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Verify session dengan backend untuk memastikan cookie ter-set
+        // Ini juga akan membantu set cookie jika belum
+        try {
+          const response = await api.get('/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${sessionToken}`
+            }
+          });
+          
+          if (response.data.success && response.data.user) {
+            console.log('[AuthCallback] Session verified with backend');
+            // Update user data dengan data terbaru dari backend
+            const verifiedUser = response.data.user;
+            localStorage.setItem(USER_CACHE_KEY, JSON.stringify(verifiedUser));
+          }
+        } catch (verifyError) {
+          // Jika verify gagal, tetap lanjut dengan cached data
+          // Cookie mungkin sudah di-set oleh backend redirect
+          console.log('[AuthCallback] Session verify skipped, using cached data');
+        }
+
+        setStatus('Redirecting to dashboard...');
 
         // Clear the hash from URL before redirect (security)
         window.history.replaceState(null, '', window.location.pathname);
 
-        // Redirect ke dashboard
-        navigate('/dashboard', { replace: true });
+        // Use window.location for full page reload to ensure clean state
+        // This helps with cookie synchronization
+        window.location.href = '/dashboard';
         
       } catch (error: any) {
         console.error('[AuthCallback] OAuth error:', error);
@@ -90,10 +114,12 @@ const AuthCallback: React.FC = () => {
         localStorage.removeItem(USER_CACHE_KEY);
         localStorage.removeItem(AUTH_STATUS_KEY);
         localStorage.removeItem(AUTH_TIMESTAMP_KEY);
+        sessionStorage.removeItem('just_authenticated');
+        sessionStorage.removeItem('oauth_session_token');
         
         // Redirect ke login setelah delay
         setTimeout(() => {
-          navigate('/login', { replace: true });
+          window.location.href = '/login';
         }, 3000);
       }
     };
