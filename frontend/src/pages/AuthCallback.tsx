@@ -1,56 +1,95 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
 
 // Storage keys (harus sama dengan AuthContext)
 const USER_CACHE_KEY = 'se26_user_cache';
 const AUTH_STATUS_KEY = 'se26_auth_status';
+const AUTH_TIMESTAMP_KEY = 'se26_auth_timestamp';
 
 const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>('Processing...');
 
   useEffect(() => {
     const processOAuth = async () => {
       try {
-        // Extract session_id from URL fragment
+        // Extract data from URL fragment (hash)
+        // Backend redirects with: /auth/callback#session_token=xxx&user_id=xxx&email=xxx&name=xxx
         const hash = window.location.hash;
-        const params = new URLSearchParams(hash.substring(1));
-        const sessionId = params.get('session_id');
-
-        if (!sessionId) {
-          throw new Error('No session_id found in URL');
-        }
-
-        console.log('[AuthCallback] Processing OAuth with session_id');
-
-        // Send session_id to backend
-        const response = await api.post('/auth/oauth/callback', {
-          session_id: sessionId
-        });
-
-        if (response.data.success) {
-          console.log('[AuthCallback] OAuth successful');
+        
+        if (!hash || hash.length <= 1) {
+          // Check for error in query params
+          const urlParams = new URLSearchParams(window.location.search);
+          const errorParam = urlParams.get('error');
           
-          // ===== PERBAIKAN: Simpan user ke localStorage SEBELUM redirect =====
-          if (response.data.user) {
-            localStorage.setItem(USER_CACHE_KEY, JSON.stringify(response.data.user));
-            localStorage.setItem(AUTH_STATUS_KEY, 'authenticated');
-            console.log('[AuthCallback] User cached to localStorage');
+          if (errorParam) {
+            throw new Error(`Authentication failed: ${errorParam}`);
           }
           
-          // Set flag untuk skip delay
-          sessionStorage.setItem('just_authenticated', 'true');
-          
-          // Redirect ke dashboard
-          // Gunakan navigate untuk SPA routing yang lebih smooth
-          navigate('/dashboard', { replace: true });
-        } else {
-          throw new Error(response.data.message || 'OAuth failed');
+          throw new Error('No authentication data received');
         }
+        
+        // Parse fragment parameters
+        const params = new URLSearchParams(hash.substring(1));
+        const sessionToken = params.get('session_token');
+        const userId = params.get('user_id');
+        const email = params.get('email');
+        const name = params.get('name');
+
+        console.log('[AuthCallback] Received OAuth data:', { 
+          hasToken: !!sessionToken, 
+          userId, 
+          email 
+        });
+
+        if (!sessionToken) {
+          throw new Error('No session token received');
+        }
+
+        if (!email) {
+          throw new Error('No email received from authentication');
+        }
+
+        setStatus('Setting up your session...');
+
+        // Construct user object
+        const user = {
+          user_id: userId || '',
+          email: email,
+          name: name || email.split('@')[0],
+          picture: null // Will be updated on next /auth/me call
+        };
+
+        // Save user to localStorage
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+        localStorage.setItem(AUTH_STATUS_KEY, 'authenticated');
+        localStorage.setItem(AUTH_TIMESTAMP_KEY, Date.now().toString());
+        
+        console.log('[AuthCallback] User cached to localStorage');
+
+        // Set flag untuk skip delay di AuthContext
+        sessionStorage.setItem('just_authenticated', 'true');
+        
+        setStatus('Redirecting to dashboard...');
+
+        // Small delay to ensure localStorage is written
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Clear the hash from URL before redirect (security)
+        window.history.replaceState(null, '', window.location.pathname);
+
+        // Redirect ke dashboard
+        navigate('/dashboard', { replace: true });
+        
       } catch (error: any) {
         console.error('[AuthCallback] OAuth error:', error);
         setError(error.message || 'Authentication failed');
+        
+        // Clear any partial auth data
+        localStorage.removeItem(USER_CACHE_KEY);
+        localStorage.removeItem(AUTH_STATUS_KEY);
+        localStorage.removeItem(AUTH_TIMESTAMP_KEY);
         
         // Redirect ke login setelah delay
         setTimeout(() => {
@@ -81,7 +120,7 @@ const AuthCallback: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-red-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="text-center">
         <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-600 mx-auto mb-4"></div>
-        <p className="text-gray-600 dark:text-gray-300 text-lg">Completing sign in...</p>
+        <p className="text-gray-600 dark:text-gray-300 text-lg">{status}</p>
       </div>
     </div>
   );

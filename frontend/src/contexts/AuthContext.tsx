@@ -17,6 +17,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  loginWithGoogle: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -243,6 +244,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Google OAuth login - redirect to backend
+  const loginWithGoogle = useCallback(() => {
+    console.log('[Auth] Initiating Google OAuth...');
+    
+    // Get backend URL
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 
+                       (import.meta as any).env.REACT_APP_BACKEND_URL || 
+                       window.location.origin;
+    
+    // Redirect to backend Google OAuth endpoint
+    window.location.href = `${backendUrl}/api/auth/google/login`;
+  }, []);
+
   const logout = async () => {
     try {
       console.log('[Auth] Logging out...');
@@ -294,7 +308,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
-        checkAuth
+        checkAuth,
+        loginWithGoogle
       }}
     >
       {children}
