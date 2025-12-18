@@ -88,49 +88,58 @@ FRONTEND_BUILD_PATH = BACKEND_DIR.parent / "frontend" / "build"
 
 
 # ============================================
-# AUTHENTICATION DEPENDENCY
+# AUTHENTICATION DEPENDENCY - FIXED
 # ============================================
 from auth_service import AuthService
-from database import get_database
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
-async def get_auth_service(db: AsyncIOMotorDatabase = Depends(get_database)) -> AuthService:
-    """Dependency to get AuthService instance"""
-    return AuthService(db)
-
-async def get_current_user_optional(
-    request: Request,
-    auth_service: AuthService = Depends(get_auth_service)
-) -> Optional[dict]:
+async def get_current_user_from_request(request: Request) -> Optional[dict]:
     """
-    Get current user if authenticated, otherwise return None
-    Used for endpoints that work with or without authentication
+    Extract current user from request using AuthService
+    Returns user dict if authenticated, None otherwise
+    
+    This function directly uses the global policy_db instead of dependency injection
+    to avoid issues with FastAPI's dependency system in certain contexts.
     """
     try:
+        # Create AuthService with the database
+        auth_service = AuthService(policy_db.db)
+        
+        # Try to authenticate user
         user = await auth_service.authenticate_user(request)
-        return {"user_id": user.user_id, "email": user.email, "name": user.name}
-    except HTTPException:
+        
+        if user:
+            logger.info(f"✓ Authenticated user: {user.email} (ID: {user.user_id})")
+            return {
+                "user_id": user.user_id, 
+                "email": user.email, 
+                "name": user.name
+            }
+        return None
+        
+    except HTTPException as e:
+        logger.debug(f"Auth check returned HTTPException: {e.status_code} - {e.detail}")
         return None
     except Exception as e:
-        logger.debug(f"Optional auth check failed: {e}")
+        logger.debug(f"Auth check failed with exception: {e}")
         return None
 
-async def get_current_user_required(
-    request: Request,
-    auth_service: AuthService = Depends(get_auth_service)
-) -> dict:
+
+async def get_current_user_optional(request: Request) -> Optional[dict]:
     """
-    Get current user, raises 401 if not authenticated
-    Used for endpoints that require authentication
+    Dependency for endpoints that work with or without authentication
     """
-    try:
-        user = await auth_service.authenticate_user(request)
-        return {"user_id": user.user_id, "email": user.email, "name": user.name}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Auth check failed: {e}")
+    return await get_current_user_from_request(request)
+
+
+async def get_current_user_required(request: Request) -> dict:
+    """
+    Dependency for endpoints that require authentication
+    Raises 401 if not authenticated
+    """
+    user = await get_current_user_from_request(request)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
 
 
 # --- 6. EVENT HANDLERS (STARTUP/SHUTDOWN) ---
@@ -216,8 +225,8 @@ async def health_check():
 @api_router.post("/chat", response_model=PolicyAnalysisResponse)
 async def analyze_policy(
     request: PolicyAnalysisRequest, 
-    background_tasks: BackgroundTasks,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
+    http_request: Request,
+    background_tasks: BackgroundTasks
 ):
     """
     Analyze policy query and generate response
@@ -229,8 +238,11 @@ async def analyze_policy(
         if not ai_analyzer:
             raise HTTPException(status_code=503, detail="AI Analyzer not initialized")
         
+        # Get current user from request
+        current_user = await get_current_user_from_request(http_request)
         user_id = current_user.get("user_id") if current_user else None
-        logger.info(f"📝 Received chat request from user {user_id or 'anonymous'}: {request.message[:50]}...")
+        
+        logger.info(f"📝 Chat request - User: {user_id or 'anonymous'}, Message: {request.message[:50]}...")
         
         # Get or create session
         session_id = request.session_id
@@ -238,23 +250,35 @@ async def analyze_policy(
             # Create new session with user_id
             session = await policy_db.create_chat_session(user_id=user_id)
             session_id = session.id
+            logger.info(f"✓ Created new session {session_id} for user {user_id or 'anonymous'}")
         else:
             # Verify session exists and user has access
-            existing_session = await policy_db.get_chat_session(session_id, user_id=user_id)
+            existing_session = await policy_db.get_chat_session(session_id)
+            
             if not existing_session:
-                # Session not found or doesn't belong to user
-                # Check if session exists at all (might be anonymous session or other user's)
-                any_session = await policy_db.get_chat_session(session_id)
-                if any_session:
-                    # Session exists but belongs to different user
-                    if user_id and any_session.user_id and any_session.user_id != user_id:
-                        raise HTTPException(status_code=403, detail="Access denied to this session")
-                    # Session is anonymous or same user, proceed
-                    pass
-                else:
-                    # Session doesn't exist, create new one
-                    session = await policy_db.create_chat_session(user_id=user_id)
-                    session_id = session.id
+                # Session doesn't exist, create new one
+                session = await policy_db.create_chat_session(user_id=user_id)
+                session_id = session.id
+                logger.info(f"✓ Session not found, created new session {session_id}")
+            else:
+                # Session exists, check ownership
+                session_owner = existing_session.user_id
+                
+                if session_owner and user_id and session_owner != user_id:
+                    # Session belongs to different user
+                    raise HTTPException(status_code=403, detail="Access denied to this session")
+                
+                # If session is anonymous (no owner) and user is logged in,
+                # optionally claim the session
+                if not session_owner and user_id:
+                    # Claim anonymous session for logged-in user
+                    await policy_db.db.chat_sessions.update_one(
+                        {"id": session_id},
+                        {"$set": {"user_id": user_id}}
+                    )
+                    logger.info(f"✓ Claimed anonymous session {session_id} for user {user_id}")
+                
+                logger.info(f"✓ Using existing session {session_id}")
 
         # Save user message
         user_message = ChatMessage(
@@ -323,9 +347,7 @@ async def analyze_policy(
 
 
 @api_router.get("/sessions", response_model=List[ChatSession])
-async def get_chat_sessions(
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def get_chat_sessions(request: Request):
     """
     Get chat sessions for the current user
     
@@ -333,11 +355,11 @@ async def get_chat_sessions(
     - If not authenticated: returns empty list (to prevent data leakage)
     """
     try:
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
         
         if not user_id:
             # Not authenticated - return empty list
-            # This prevents anonymous users from seeing any sessions
             logger.info("📋 Anonymous user requesting sessions - returning empty list")
             return []
         
@@ -351,20 +373,19 @@ async def get_chat_sessions(
 
 
 @api_router.get("/sessions/{session_id}", response_model=ChatSession)
-async def get_chat_session(
-    session_id: str,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def get_chat_session(session_id: str, request: Request):
     """
     Get a specific chat session by ID
     
     - Verifies user has access to the session
     """
     try:
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
+        
         logger.info(f"📋 Fetching session {session_id} for user {user_id or 'anonymous'}")
         
-        # First, get the session without user filter to check ownership
+        # Get the session
         session = await policy_db.get_chat_session(session_id)
         
         if not session:
@@ -388,16 +409,14 @@ async def get_chat_session(
 
 
 @api_router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def delete_session(session_id: str, request: Request):
     """
     Delete a specific chat session
     
     - Verifies user owns the session before deleting
     """
     try:
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
         
         if not user_id:
@@ -423,22 +442,20 @@ class BulkDeleteRequest(BaseModel):
 
 
 @api_router.delete("/sessions/batch")
-async def delete_multiple_sessions(
-    request: BulkDeleteRequest,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def delete_multiple_sessions(delete_request: BulkDeleteRequest, request: Request):
     """
     Delete multiple chat sessions at once
     
     - Only deletes sessions belonging to the authenticated user
     """
     try:
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
         
         if not user_id:
             raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
         
-        count = await policy_db.delete_chat_sessions(request.session_ids, user_id=user_id)
+        count = await policy_db.delete_chat_sessions(delete_request.session_ids, user_id=user_id)
         logger.info(f"✓ Bulk deleted {count} sessions for user {user_id}")
         return {"message": f"Successfully deleted {count} sessions", "count": count}
     except HTTPException:
@@ -449,15 +466,14 @@ async def delete_multiple_sessions(
 
 
 @api_router.delete("/sessions/all")
-async def delete_all_sessions(
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def delete_all_sessions(request: Request):
     """
     Delete ALL chat sessions for the current user
     
     - Only deletes sessions belonging to the authenticated user
     """
     try:
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
         
         if not user_id:
@@ -478,11 +494,7 @@ async def delete_all_sessions(
 # ============================================
 
 @api_router.get("/report/{session_id}/{format}")
-async def generate_report(
-    session_id: str, 
-    format: str,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def generate_report(session_id: str, format: str, request: Request):
     """
     Generate comprehensive report with visualizations and policies
     
@@ -499,6 +511,7 @@ async def generate_report(
                 detail="Format must be 'pdf', 'docx', or 'html'"
             )
         
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
         
         # Get session with access check
@@ -561,14 +574,12 @@ async def generate_report(
 
 
 @api_router.get("/report/{session_id}/preview")
-async def preview_report(
-    session_id: str,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
+async def preview_report(session_id: str, request: Request):
     """
     Preview report as HTML in browser (tidak download, langsung tampil)
     """
     try:
+        current_user = await get_current_user_from_request(request)
         user_id = current_user.get("user_id") if current_user else None
         
         session = await policy_db.get_chat_session(session_id)
@@ -590,6 +601,45 @@ async def preview_report(
     except Exception as e:
         logger.error(f"Error previewing report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error previewing report: {str(e)}")
+
+
+# ============================================
+# DEBUG ENDPOINT - Check Auth Status
+# ============================================
+
+@api_router.get("/debug/auth")
+async def debug_auth(request: Request):
+    """
+    Debug endpoint to check authentication status
+    Shows what user info is being extracted from the request
+    """
+    try:
+        # Check cookies
+        cookies = dict(request.cookies)
+        session_token = cookies.get("session_token", None)
+        
+        # Check Authorization header
+        auth_header = request.headers.get("Authorization", None)
+        
+        # Try to get user
+        current_user = await get_current_user_from_request(request)
+        
+        return {
+            "authenticated": current_user is not None,
+            "user": current_user,
+            "debug": {
+                "has_session_cookie": session_token is not None,
+                "session_token_preview": session_token[:20] + "..." if session_token else None,
+                "has_auth_header": auth_header is not None,
+                "cookies_count": len(cookies)
+            }
+        }
+    except Exception as e:
+        return {
+            "authenticated": False,
+            "user": None,
+            "error": str(e)
+        }
 
 
 # ============================================
@@ -682,7 +732,8 @@ async def not_found_handler(request: Request, exc):
                     "/api/health",
                     "/api/chat",
                     "/api/sessions",
-                    "/api/auth/me"
+                    "/api/auth/me",
+                    "/api/debug/auth"
                 ]
             }
         )
