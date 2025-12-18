@@ -477,7 +477,7 @@ const ChatInterface: React.FC = () => {
                 <Bot className="h-2.5 w-2.5 text-white" />
               </div>
               <h1 className="text-sm font-medium text-gray-800 dark:text-white">
-                AI Policy & Insight Generator
+                SMART SE2026 Agentic AI
               </h1>
             </div>
 

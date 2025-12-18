@@ -42,11 +42,11 @@ const BrandLogo: React.FC<BrandLogoProps> = ({ size = 'md', showText = true, cla
       {showText && (
         <div className="flex flex-col min-w-0">
           <div className={`${config.text} bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent leading-tight`}>
-            PolicyAI
+            SMART SE2026
           </div>
           {size !== 'sm' && (
             <div className="text-xs text-gray-500 dark:text-gray-400 leading-tight">
-              Insight Generator
+              Agentic AI for Analysis
             </div>
           )}
         </div>
