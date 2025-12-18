@@ -1,7 +1,6 @@
 import os
 import uuid
 import hashlib
-import httpx
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Request, Response
@@ -16,7 +15,6 @@ class AuthService:
         self.db = db
         self.session_duration_days = 30  # Extended from 7 to 30 days
         self.session_refresh_threshold_days = 7  # Auto-refresh if less than 7 days remaining
-        self.emergent_auth_url = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
         
         # Determine environment
         self.is_production = os.environ.get('ENVIRONMENT', 'production') == 'production'
@@ -210,35 +208,15 @@ class AuthService:
         
         return user
 
-    async def process_emergent_oauth(self, session_id: str) -> Dict[str, Any]:
-        """Process Emergent OAuth session ID and get user data"""
-        try:
-            # Use longer timeout for OAuth
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    self.emergent_auth_url,
-                    headers={"X-Session-ID": session_id},
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"Emergent OAuth failed: {response.status_code} - {response.text}")
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail="Failed to fetch session data from Emergent"
-                    )
-                
-                return response.json()
+    async def create_or_update_user_from_google(self, google_data: Dict[str, Any]) -> User:
+        """
+        Create or update user from Google OAuth data
+        Replaces the old Emergent OAuth method
+        """
+        email = google_data.get("email")
+        if not email:
+            raise ValueError("No email provided from Google")
         
-        except httpx.TimeoutException as e:
-            logger.error(f"OAuth timeout: {e}")
-            raise HTTPException(status_code=504, detail="OAuth service timeout")
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error during OAuth: {e}")
-            raise HTTPException(status_code=500, detail="OAuth service unavailable")
-
-    async def create_or_update_user_from_oauth(self, oauth_data: Dict[str, Any]) -> User:
-        """Create or update user from OAuth data"""
-        email = oauth_data["email"]
         now = datetime.now(timezone.utc)
         
         # Check if user exists
@@ -249,19 +227,21 @@ class AuthService:
         
         if existing_user:
             # Update user data
+            update_data = {
+                "name": google_data.get("name", existing_user.get("name")),
+                "picture": google_data.get("picture"),
+                "google_id": google_data.get("google_id"),
+                "last_login": now
+            }
+            
             await self.db.users.update_one(
                 {"email": email},
-                {
-                    "$set": {
-                        "name": oauth_data["name"],
-                        "picture": oauth_data.get("picture"),
-                        "last_login": now
-                    }
-                }
+                {"$set": update_data}
             )
+            
             # Refresh the user data
-            existing_user["name"] = oauth_data["name"]
-            existing_user["picture"] = oauth_data.get("picture")
+            existing_user.update(update_data)
+            logger.info(f"Updated existing user: {email}")
             return User(**existing_user)
         else:
             # Create new user
@@ -269,17 +249,20 @@ class AuthService:
             new_user = {
                 "user_id": user_id,
                 "email": email,
-                "name": oauth_data["name"],
-                "picture": oauth_data.get("picture"),
+                "name": google_data.get("name", email.split("@")[0]),
+                "picture": google_data.get("picture"),
+                "google_id": google_data.get("google_id"),
+                "auth_provider": "google",
                 "created_at": now,
                 "last_login": now
             }
             await self.db.users.insert_one(new_user)
+            logger.info(f"Created new user from Google: {email}")
             return User(**new_user)
 
-    async def create_session(self, user_id: str, response: Response, oauth_session_token: Optional[str] = None) -> str:
+    async def create_session(self, user_id: str, response: Response, custom_token: Optional[str] = None) -> str:
         """Create new session for user and set cookie"""
-        session_token = oauth_session_token or self.generate_session_token()
+        session_token = custom_token or self.generate_session_token()
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=self.session_duration_days)
         
@@ -312,7 +295,7 @@ class AuthService:
         )
         
         logger.info(f"Created session for user {user_id}, expires at {expires_at}")
-        logger.info(f"Cookie settings: {cookie_settings}")
+        logger.debug(f"Cookie settings: {cookie_settings}")
         return session_token
 
     async def register_user(self, register_data: RegisterRequest) -> User:
@@ -338,6 +321,7 @@ class AuthService:
             "name": register_data.name,
             "password": hashed_password,
             "picture": None,
+            "auth_provider": "email",
             "created_at": now,
             "last_login": now
         }
@@ -357,6 +341,11 @@ class AuthService:
         )
         
         if not user_doc:
+            return None
+        
+        # Check if user has password (might be Google-only user)
+        if not user_doc.get("password"):
+            logger.warning(f"User {login_data.email} has no password (Google-only account)")
             return None
         
         # Verify password
