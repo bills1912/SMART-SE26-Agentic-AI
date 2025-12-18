@@ -7,6 +7,7 @@ from database import get_database
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def get_auth_service(db: AsyncIOMotorDatabase = Depends(get_database)) -> AuthSe
 
 
 # ============================================
-# GOOGLE OAUTH ENDPOINTS (NEW)
+# GOOGLE OAUTH ENDPOINTS (FIXED)
 # ============================================
 
 @router.get("/google/login")
@@ -47,7 +48,6 @@ async def google_login():
 @router.get("/google/callback")
 async def google_callback(
     request: Request,
-    response: Response,
     code: str = None,
     error: str = None,
     auth_service: AuthService = Depends(get_auth_service)
@@ -55,6 +55,8 @@ async def google_callback(
     """
     Handle Google OAuth callback
     Google redirects here after user authorizes
+    
+    FIXED: Cookie is now set on the RedirectResponse object
     """
     frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
     
@@ -91,16 +93,58 @@ async def google_callback(
         # Create or update user in database
         user = await auth_service.create_or_update_user_from_google(google_user)
         
-        # Create session
-        session_token = await auth_service.create_session(user.user_id, response)
+        # Generate session token manually (don't use create_session with response)
+        session_token = auth_service.generate_session_token()
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=auth_service.session_duration_days)
         
-        # Redirect to frontend with success
-        # Include session token in URL fragment for frontend to capture
-        # Fragment (#) is not sent to server, so it's safe
-        redirect_url = f"{frontend_url}/auth/callback#session_token={session_token}&user_id={user.user_id}&email={user.email}&name={user.name}"
+        # Store session in database
+        session_doc = {
+            "user_id": user.user_id,
+            "session_token": session_token,
+            "expires_at": expires_at,
+            "created_at": now,
+            "last_activity": now
+        }
         
-        logger.info(f"OAuth success, redirecting to frontend")
-        return RedirectResponse(url=redirect_url, status_code=302)
+        await auth_service.db.user_sessions.update_one(
+            {"session_token": session_token},
+            {"$set": session_doc},
+            upsert=True
+        )
+        
+        logger.info(f"Created session for Google user {user.user_id}")
+        
+        # Create redirect URL with user info in fragment
+        # URL encode the values to handle special characters
+        from urllib.parse import quote
+        redirect_url = (
+            f"{frontend_url}/auth/callback"
+            f"#session_token={session_token}"
+            f"&user_id={user.user_id}"
+            f"&email={quote(user.email)}"
+            f"&name={quote(user.name or '')}"
+        )
+        
+        # Create RedirectResponse and set cookie on IT
+        redirect_response = RedirectResponse(url=redirect_url, status_code=302)
+        
+        # Get cookie settings from auth_service
+        cookie_settings = auth_service._get_cookie_settings()
+        
+        # Set cookie on the redirect response
+        redirect_response.set_cookie(
+            key="session_token",
+            value=session_token,
+            max_age=auth_service.session_duration_days * 24 * 60 * 60,  # 30 days in seconds
+            expires=expires_at,
+            **cookie_settings
+        )
+        
+        logger.info(f"OAuth success, redirecting to frontend with cookie set")
+        logger.info(f"Cookie settings: {cookie_settings}")
+        
+        return redirect_response
         
     except Exception as e:
         logger.error(f"Google callback error: {e}", exc_info=True)
