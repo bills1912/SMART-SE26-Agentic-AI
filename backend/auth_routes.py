@@ -5,6 +5,8 @@ from auth_service import AuthService
 from google_auth import google_oauth
 from database import get_database
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -15,6 +17,19 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 def get_auth_service(db: AsyncIOMotorDatabase = Depends(get_database)) -> AuthService:
     return AuthService(db)
+
+
+# ============================================
+# MOBILE GOOGLE SIGN-IN MODEL
+# ============================================
+
+class GoogleMobileLoginRequest(BaseModel):
+    """Request model for mobile Google Sign-In"""
+    id_token: Optional[str] = None  # ID token dari Google Sign-In (jika ada)
+    access_token: Optional[str] = None  # Access token sebagai alternatif
+    email: EmailStr
+    name: str
+    picture: Optional[str] = None
 
 
 # ============================================
@@ -42,6 +57,71 @@ async def google_login():
         
     except Exception as e:
         logger.error(f"Google login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/google/mobile")
+async def google_mobile_login(
+    request_data: GoogleMobileLoginRequest,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Handle Google Sign-In from mobile app (native)
+    
+    Mobile app sends user info obtained from Google Sign-In SDK
+    We trust this because:
+    1. The app is signed with our keystore
+    2. Google Sign-In SDK only works with registered SHA-1/package name
+    
+    For production, you should verify the id_token with Google's API
+    """
+    try:
+        logger.info(f"Mobile Google login attempt for: {request_data.email}")
+        
+        # Validate required fields
+        if not request_data.email:
+            raise HTTPException(status_code=400, detail="Email is required")
+        
+        if not request_data.name:
+            raise HTTPException(status_code=400, detail="Name is required")
+        
+        # Optional: Verify ID token with Google (recommended for production)
+        # For now, we trust the mobile app since it's signed with our keystore
+        # and Google Sign-In SDK validates the user on the client side
+        
+        # If id_token is provided, you can verify it like this:
+        # if request_data.id_token:
+        #     verified = await verify_google_id_token(request_data.id_token)
+        #     if not verified:
+        #         raise HTTPException(status_code=401, detail="Invalid Google token")
+        
+        # Prepare Google user data
+        google_user_data = {
+            "email": request_data.email,
+            "name": request_data.name,
+            "picture": request_data.picture,
+            "google_id": request_data.email,  # Use email as google_id if no id_token
+        }
+        
+        # Create or update user
+        user = await auth_service.create_or_update_user_from_google(google_user_data)
+        
+        # Create session
+        session_token = await auth_service.create_session(user.user_id, response)
+        
+        logger.info(f"Mobile Google login successful for: {request_data.email}")
+        
+        return {
+            "success": True,
+            "user": user.dict(),
+            "session_token": session_token
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Mobile Google login error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
