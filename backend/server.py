@@ -34,7 +34,7 @@ from models import (
     ScrapedData
 )
 from database import PolicyDatabase
-from ai_analyzer_dsstar import PolicyAIAnalyzer
+from ai_analyzer import PolicyAIAnalyzer
 from report_generator import ReportGenerator
 
 # --- 4. INISIALISASI DATABASE & AI (CRITICAL FIX) ---
