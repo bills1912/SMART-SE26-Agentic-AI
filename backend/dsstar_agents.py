@@ -1970,30 +1970,30 @@ class DSStarOrchestrator:
         if 'policies_count' in new_result:
             logger.info(f"  📋 Step reported {new_result['policies_count']} policies")
         
-        def _is_data_query(self, query: str) -> bool:
-            """Check if query requires data analysis"""
-            query_lower = query.lower()
-            
-            data_keywords = [
-                'berapa', 'jumlah', 'total', 'banyak', 'bandingkan', 'compare',
-                'terbanyak', 'tertinggi', 'terendah', 'top', 'ranking',
-                'distribusi', 'sebaran', 'komposisi', 'proporsi',
-                'provinsi', 'sektor', 'wilayah', 'daerah',
-                'analisis', 'analyze', 'data', 'statistik', 'usaha', 'bisnis'
-            ]
-            
-            conversational_only = [
-                'halo', 'hello', 'hi', 'hai', 'terima kasih', 'thanks',
-                'siapa kamu', 'apa itu', 'selamat pagi', 'selamat siang'
-            ]
-            
-            has_data_keyword = any(keyword in query_lower for keyword in data_keywords)
-            is_conversational = any(keyword in query_lower for keyword in conversational_only)
-            
-            if is_conversational and not has_data_keyword:
-                return False
-            
-            return has_data_keyword
+    def _is_data_query(self, query: str) -> bool:
+        """Check if query requires data analysis"""
+        query_lower = query.lower()
+        
+        data_keywords = [
+            'berapa', 'jumlah', 'total', 'banyak', 'bandingkan', 'compare',
+            'terbanyak', 'tertinggi', 'terendah', 'top', 'ranking',
+            'distribusi', 'sebaran', 'komposisi', 'proporsi',
+            'provinsi', 'sektor', 'wilayah', 'daerah',
+            'analisis', 'analyze', 'data', 'statistik', 'usaha', 'bisnis'
+        ]
+        
+        conversational_only = [
+            'halo', 'hello', 'hi', 'hai', 'terima kasih', 'thanks',
+            'siapa kamu', 'apa itu', 'selamat pagi', 'selamat siang'
+        ]
+        
+        has_data_keyword = any(keyword in query_lower for keyword in data_keywords)
+        is_conversational = any(keyword in query_lower for keyword in conversational_only)
+        
+        if is_conversational and not has_data_keyword:
+            return False
+        
+        return has_data_keyword
     
     async def _handle_conversational_query(self, query: str, language: str) -> Dict[str, Any]:
         """Handle non-data queries"""
