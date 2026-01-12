@@ -11,12 +11,7 @@ import asyncio
 from pydantic import BaseModel
 
 # --- 1. KONFIGURASI ENV (FIXED) ---
-# Mengambil path folder backend saat ini
-BACKEND_DIR = Path(__file__).resolve().parent
-# Naik satu level ke root, lalu masuk ke frontend/.env
-ENV_PATH = BACKEND_DIR.parent / 'frontend' / '.env'
-load_dotenv(ENV_PATH)
-
+load_dotenv()
 # --- 2. LOGGING ---
 logging.basicConfig(
     level=logging.INFO,
