@@ -78,10 +78,6 @@ api_router = APIRouter(prefix="/api")
 scraping_in_progress = False
 last_scraping_time = None
 
-# --- FRONTEND BUILD PATH (DEFINED EARLY) ---
-FRONTEND_BUILD_PATH = BACKEND_DIR.parent / "frontend" / "build"
-
-
 # ============================================
 # AUTHENTICATION DEPENDENCY - FIXED
 # ============================================
