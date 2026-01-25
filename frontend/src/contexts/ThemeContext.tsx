@@ -43,6 +43,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     return 'light';
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const resolveTheme = (mode: ThemeMode): ResolvedTheme => {
     if (mode === 'system') {
       return getSystemTheme();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Download, Loader2, FileText, Globe } from 'lucide-react';
 import apiService from '../services/api';
 
