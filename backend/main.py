@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 # --- 1. KONFIGURASI ENV (FIXED) ---
 load_dotenv()
+BACKEND_DIR = Path(__file__).resolve().parent
+FRONTEND_BUILD_PATH = BACKEND_DIR.parent / 'frontend' / 'build'
 # --- 2. LOGGING ---
 logging.basicConfig(
     level=logging.INFO,
