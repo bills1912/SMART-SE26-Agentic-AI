@@ -60,7 +60,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     
     // Save mode to localStorage (not resolved theme)
     localStorage.setItem('themeMode', themeMode);
-  }, [themeMode]);
+  }, [resolveTheme, themeMode]);
 
   // Listen for system theme changes when in system mode
   useEffect(() => {

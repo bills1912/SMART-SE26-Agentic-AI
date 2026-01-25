@@ -105,9 +105,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEdit, onRegene
     return 0;
   };
 
-  const hasValidArray = (arr: unknown): boolean => {
-    return Array.isArray(arr) && arr.length > 0;
-  };
+  // const hasValidArray = (arr: unknown): boolean => {
+  //   return Array.isArray(arr) && arr.length > 0;
+  // };
 
   // Safe getters for arrays
   const visualizationsCount = getArrayLength(message.visualizations);

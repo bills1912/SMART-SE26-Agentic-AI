@@ -46,7 +46,6 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     sessions,
     isLoading,
     createNewChat,
-    switchToSession,
     exportCurrentChat,
     exportAllChats,
     deleteSession,

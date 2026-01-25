@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Sparkles, Send, Loader2, Database } from 'lucide-react';
+import { Sparkles, Send, Loader2 } from 'lucide-react';
 // Pastikan path import VoiceRecorder sesuai
 import VoiceRecorder from './VoiceRecorder'; 
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Square } from 'lucide-react';
+import { Mic, Square } from 'lucide-react';
 
 interface VoiceRecorderProps {
   onTranscriptChange: (transcript: string) => void;
@@ -28,14 +28,14 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onTranscriptChange, disab
 
     recognition.onresult = (event: any) => {
       let finalTranscript = '';
-      let interimTranscript = '';
+      // let interimTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           finalTranscript += transcript;
         } else {
-          interimTranscript += transcript;
+          // interimTranscript += transcript;
         }
       }
 

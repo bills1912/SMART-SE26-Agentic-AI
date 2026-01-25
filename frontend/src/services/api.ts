@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
 import {
-  ChatMessage,
+  // ChatMessage,
   ChatSession,
   PolicyAnalysisRequest,
   PolicyAnalysisResponse,

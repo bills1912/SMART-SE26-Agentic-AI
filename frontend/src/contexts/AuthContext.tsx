@@ -379,7 +379,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('[Auth] No cached user, checking auth...');
       checkAuth();
     }
-  }, [location.pathname]); // Intentionally minimal dependencies
+  }, [checkAuth, location.pathname, user]); // Intentionally minimal dependencies
 
   return (
     <AuthContext.Provider
