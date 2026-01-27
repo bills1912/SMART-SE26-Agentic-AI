@@ -63,7 +63,8 @@ app.add_middleware(
     allow_origins=[
         "https://smart-se26-agentic-ai-chatbot-web.onrender.com",
         "http://localhost:3000",
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "https://refreshing-acceptance-production.up.railway.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],

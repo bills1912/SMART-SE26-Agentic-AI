@@ -45,7 +45,7 @@ class GoogleOAuth:
             if os.environ.get('RENDER_SERVICE_NAME'):
                 # Running on Render
                 service_name = os.environ.get('RENDER_SERVICE_NAME', '')
-                self.backend_url = f"https://{service_name}.onrender.com"
+                self.backend_url = f"https://{service_name}.up.railway.app"
             else:
                 self.backend_url = f"http://{host}:{port}"
         
