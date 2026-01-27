@@ -10,7 +10,7 @@ module.exports = {
   devServer: {
     proxy: {
       '/api': {
-        target: 'https://smart-se26-agentic-ai.onrender.com',
+        target: 'https://refreshing-acceptance-production.up.railway.app',
         changeOrigin: true,
         secure: false,
       },
