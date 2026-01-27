@@ -3,7 +3,7 @@ const path = require('path');
 
 // Environment variable overrides
 const config = {
-  disableHotReload: process.env.DISABLE_HOT_RELOAD === 'true',
+  disableHotReload: process.env.DISABLE_HOT_RELOAD === 'true' || process.env.NODE_ENV === 'production',
 };
 
 module.exports = {
@@ -20,7 +20,36 @@ module.exports = {
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
-    configure: (webpackConfig) => {
+    configure: (webpackConfig, { env, paths }) => {
+      
+      // CRITICAL FIX: Disable React Refresh in production
+      if (env === 'production') {
+        // Remove ReactRefreshWebpackPlugin
+        webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
+          return !(
+            plugin.constructor.name === 'ReactRefreshPlugin' ||
+            plugin.constructor.name === 'ReactRefreshWebpackPlugin'
+          );
+        });
+
+        // Remove react-refresh from babel loader
+        const oneOfRule = webpackConfig.module.rules.find(rule => rule.oneOf);
+        if (oneOfRule) {
+          oneOfRule.oneOf.forEach(rule => {
+            if (rule.use) {
+              rule.use.forEach(loader => {
+                if (loader.loader && loader.loader.includes('babel-loader')) {
+                  if (loader.options && loader.options.plugins) {
+                    loader.options.plugins = loader.options.plugins.filter(plugin => {
+                      return !plugin.includes('react-refresh');
+                    });
+                  }
+                }
+              });
+            }
+          });
+        }
+      }
       
       // Disable hot reload completely if environment variable is set
       if (config.disableHotReload) {
