@@ -9,7 +9,7 @@ import {
 // ===== PERBAIKAN: Gunakan full backend URL =====
 const BACKEND_URL =
   process.env.REACT_APP_BACKEND_URL ||
-  "https://smart-se26-agentic-ai.onrender.com";
+  "https://smart-se26-agentic-ai-production.up.railway.app";
 const API_BASE = `${BACKEND_URL}/api`;
 
 console.log("[API] Backend URL:", BACKEND_URL);

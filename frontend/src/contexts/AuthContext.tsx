@@ -298,9 +298,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Or use known backend URL for cross-origin
     if (!backendUrl) {
       // Check if we're on the frontend domain
-      if (window.location.hostname.includes('web.onrender.com')) {
+      if (window.location.hostname.includes('web.up.railway.app')) {
         // Replace 'web' with backend pattern
-        backendUrl = window.location.origin.replace('-web.onrender.com', '.onrender.com');
+        backendUrl = window.location.origin.replace('-web.up.railway.app', '.up.railway.app');
       } else {
         backendUrl = window.location.origin;
       }
