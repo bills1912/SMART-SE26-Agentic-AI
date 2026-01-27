@@ -1,10 +1,4 @@
-// Load configuration from environment or config file
 const path = require('path');
-
-// Environment variable overrides
-const config = {
-  disableHotReload: process.env.DISABLE_HOT_RELOAD === 'true' || process.env.NODE_ENV === 'production',
-};
 
 module.exports = {
   devServer: {
@@ -21,61 +15,66 @@ module.exports = {
       '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig, { env, paths }) => {
+      console.log('🔧 CRACO Config Running...');
+      console.log('   Environment:', env);
+      console.log('   NODE_ENV:', process.env.NODE_ENV);
       
-      // CRITICAL FIX: Disable React Refresh in production
-      if (env === 'production') {
-        // Remove ReactRefreshWebpackPlugin
-        webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
-          return !(
-            plugin.constructor.name === 'ReactRefreshPlugin' ||
-            plugin.constructor.name === 'ReactRefreshWebpackPlugin'
-          );
-        });
-
-        // Remove react-refresh from babel loader
-        const oneOfRule = webpackConfig.module.rules.find(rule => rule.oneOf);
-        if (oneOfRule) {
-          oneOfRule.oneOf.forEach(rule => {
-            if (rule.use) {
-              rule.use.forEach(loader => {
-                if (loader.loader && loader.loader.includes('babel-loader')) {
-                  if (loader.options && loader.options.plugins) {
-                    loader.options.plugins = loader.options.plugins.filter(plugin => {
-                      return !plugin.includes('react-refresh');
-                    });
-                  }
-                }
-              });
-            }
-          });
-        }
-      }
+      // ✅ FIX: Check environment dengan benar
+      const isProduction = env === 'production' || process.env.NODE_ENV === 'production';
       
-      // Disable hot reload completely if environment variable is set
-      if (config.disableHotReload) {
-        // Remove hot reload related plugins
-        webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
-          return !(plugin.constructor.name === 'HotModuleReplacementPlugin');
+      if (isProduction) {
+        console.log('🔥 PRODUCTION MODE DETECTED');
+        console.log('   Removing React Refresh...');
+        
+        // Remove React Refresh Webpack Plugin
+        let removedCount = 0;
+        webpackConfig.plugins = (webpackConfig.plugins || []).filter(plugin => {
+          const name = plugin.constructor.name;
+          const shouldRemove = name === 'ReactRefreshPlugin' || 
+                              name === 'ReactRefreshWebpackPlugin';
+          if (shouldRemove) {
+            console.log(`   ✅ Removed plugin: ${name}`);
+            removedCount++;
+          }
+          return !shouldRemove;
         });
         
-        // Disable watch mode
-        webpackConfig.watch = false;
-        webpackConfig.watchOptions = {
-          ignored: /.*/, // Ignore all files
-        };
+        if (removedCount === 0) {
+          console.log('   ⚠️  Warning: No React Refresh plugins found (might be okay)');
+        }
+        
+        // Remove react-refresh from babel-loader
+        const babelLoaderRule = webpackConfig.module.rules
+          .find(rule => rule.oneOf)
+          ?.oneOf.find(rule => {
+            if (rule.loader && rule.loader.includes('babel-loader')) return true;
+            if (rule.use) {
+              const babelLoader = Array.isArray(rule.use) 
+                ? rule.use.find(u => u.loader && u.loader.includes('babel-loader'))
+                : (rule.use.loader && rule.use.loader.includes('babel-loader') ? rule.use : null);
+              return !!babelLoader;
+            }
+            return false;
+          });
+        
+        if (babelLoaderRule) {
+          const babelOptions = babelLoaderRule.options || 
+                              (babelLoaderRule.use && babelLoaderRule.use[0] && babelLoaderRule.use[0].options);
+          
+          if (babelOptions && babelOptions.plugins) {
+            const before = babelOptions.plugins.length;
+            babelOptions.plugins = babelOptions.plugins.filter(plugin => {
+              const pluginStr = String(plugin);
+              return !pluginStr.includes('react-refresh');
+            });
+            const after = babelOptions.plugins.length;
+            console.log(`   ✅ Removed ${before - after} react-refresh babel plugin(s)`);
+          }
+        }
+        
+        console.log('✅ React Refresh removal complete!');
       } else {
-        // Add ignored patterns to reduce watched directories
-        webpackConfig.watchOptions = {
-          ...webpackConfig.watchOptions,
-          ignored: [
-            '**/node_modules/**',
-            '**/.git/**',
-            '**/build/**',
-            '**/dist/**',
-            '**/coverage/**',
-            '**/public/**',
-          ],
-        };
+        console.log('🚧 DEVELOPMENT MODE - React Refresh enabled');
       }
       
       return webpackConfig;
