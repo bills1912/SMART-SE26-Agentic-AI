@@ -78,7 +78,7 @@ class PolicyAIAnalyzer:
         api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
         if api_key:
             genai.configure(api_key=api_key)
-            model_name = os.environ.get('LLM_MODEL', 'gemini-2.5-pro')
+            model_name = os.environ.get('LLM_MODEL', 'gemini-2.5-flash')
             self.model = genai.GenerativeModel(model_name)
             logger.info(f"Gemini initialized: {model_name}")
         else:
