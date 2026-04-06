@@ -1,35 +1,56 @@
 """
 PolicyAIAnalyzer with DS-STAR Framework Integration
 ====================================================
-Optimized version yang menggunakan DS-STAR framework untuk
-analisis data science yang lebih robust dan terverifikasi.
+Drop-in replacement for ai_analyzer.py that uses the DS-STAR
+(Data Science Agent via Iterative Planning and Verification) framework.
 
-Key Improvements:
-1. Iterative Planning & Verification
-2. LLM-as-Judge untuk memastikan kecukupan plan
-3. Automatic debugging untuk error recovery
-4. Data file analysis untuk konteks yang lebih baik
+To switch from the old analyzer to DS-STAR, change your server.py import:
+  FROM: from ai_analyzer import PolicyAIAnalyzer
+  TO:   from ai_analyzer_dsstar import PolicyAIAnalyzer
+
+DS-STAR Pipeline (per query):
+  ┌──────────────────────────────────────────────────────┐
+  │ PHASE 1: DataFileAnalyzer                            │
+  │   LLM generates Python → execute → data_description  │
+  │   (cached 1 hour)                                    │
+  ├──────────────────────────────────────────────────────┤
+  │ PHASE 2: Iterative Planning & Verification           │
+  │   ┌─→ Planner → natural language step                │
+  │   │   Coder → Python code querying MongoDB           │
+  │   │   Execute → stdout result                        │
+  │   │   Verifier (LLM-as-Judge) → Yes/No               │
+  │   │   if No: Router → "Add Step"/"Step N is wrong!"  │
+  │   └─────────────────────────── loop ←────────────────│
+  ├──────────────────────────────────────────────────────┤
+  │ PHASE 3: Finalizer                                   │
+  │   LLM generates code → structured JSON output        │
+  ├──────────────────────────────────────────────────────┤
+  │ PHASE 4: Response Generation                         │
+  │   Narrative  → user-facing text                      │
+  │   Visualizer → ECharts configs (bar, pie, treemap)   │
+  │   InsightGen → insights + policy recommendations     │
+  │   (3-tier fallback: InsightAgent → LLM → rules)      │
+  └──────────────────────────────────────────────────────┘
 """
 
 import os
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import google.generativeai as genai
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Import DS-STAR components
 from dsstar_agents import (
     DSStarOrchestrator,
     DataFileAnalyzerAgent,
+    DSStarConfig,
     KBLI_MAPPING,
-    KBLI_SHORT_NAMES
+    KBLI_SHORT_NAMES,
 )
 
 logger = logging.getLogger(__name__)
 
-# Load environment
 BACKEND_DIR = Path(__file__).resolve().parent
 ENV_PATH = BACKEND_DIR.parent / 'frontend' / '.env'
 load_dotenv(ENV_PATH)
@@ -37,40 +58,37 @@ load_dotenv(ENV_PATH)
 
 class PolicyAIAnalyzer:
     """
-    Enhanced Policy Analyzer with DS-STAR Framework.
+    Main analyzer class used by server.py.
     
-    Menggunakan iterative planning dan verification untuk memastikan
-    hasil analisis yang akurat dan komprehensif.
-    
-    Features:
-    - Automatic data structure analysis
-    - Iterative plan refinement with LLM-as-Judge
-    - Robust error handling with debugging agent
-    - Advanced visualizations (Heatmap, Treemap, Radar)
+    API contract (unchanged from original ai_analyzer.py):
+      Input:  analyze_policy_query(query, language, scraped_data)
+      Output: {
+          'message': str,           # narrative response
+          'visualizations': list,   # ECharts configs
+          'insights': list[str],    # insight strings (guaranteed ≥2)
+          'policies': list[dict],   # policy recommendations (guaranteed ≥1)
+          'supporting_data_count': int
+      }
     """
-    
+
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
-        
-        # Initialize Gemini for direct use (conversational, etc.)
+
+        # Initialize Gemini (for fallback direct usage)
         api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
         if api_key:
             genai.configure(api_key=api_key)
             model_name = os.environ.get('LLM_MODEL', 'gemini-2.0-flash-exp')
             self.model = genai.GenerativeModel(model_name)
-            logger.info(f"Gemini initialized with model: {model_name}")
+            logger.info(f"Gemini initialized: {model_name}")
         else:
             logger.warning("No Gemini API key found")
             self.model = None
-        
-        # Initialize DS-STAR Orchestrator
+
+        # Initialize DS-STAR orchestrator
         self.dsstar = DSStarOrchestrator(db)
-        
-        # Cache for data description
-        self._data_description = None
-        
         logger.info("PolicyAIAnalyzer initialized with DS-STAR framework")
-    
+
     async def analyze_policy_query(
         self,
         query: str,
@@ -78,93 +96,68 @@ class PolicyAIAnalyzer:
         scraped_data: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Main analysis endpoint using DS-STAR framework.
+        Main entry point. Delegates to DS-STAR orchestrator.
         
-        DS-STAR Process:
-        1. Data File Analysis - Understand data structure
-        2. Initial Plan Creation - Create first executable step
-        3. Iterative Execution - Execute and verify plan
-        4. Plan Refinement - Add/modify steps based on verification
-        5. Final Response - Generate comprehensive answer
+        The DS-STAR pipeline handles ALL query types adaptively:
+        - Rankings ("provinsi mana yang terbanyak?")
+        - Comparisons ("bandingkan Jakarta dan Jatim")
+        - Distributions ("distribusi sektor di Indonesia")
+        - Province detail ("analisis Jawa Barat")
+        - Sector analysis ("sektor perdagangan di semua provinsi")
+        - Overview ("gambaran umum sensus ekonomi")
+        - Conversational ("halo", "bisa apa saja?")
         
-        Args:
-            query: User's question in natural language
-            language: Response language (default: Indonesian)
-            scraped_data: Optional scraped data (not used in DS-STAR)
-        
-        Returns:
-            Dict with message, visualizations, insights, policies
+        The LLM adaptively plans and generates code based on the 
+        actual user question — no hardcoded intent detection needed.
         """
         try:
-            logger.info(f"DS-STAR Analysis: {query[:50]}...")
-            
-            # Use DS-STAR orchestrator for analysis
+            logger.info(f"DS-STAR analyze: {query[:60]}...")
             result = await self.dsstar.analyze(query, language)
-            
-            # Log analysis metrics
+
             logger.info(
-                f"DS-STAR Complete: "
+                f"DS-STAR done: msg={len(result.get('message',''))}ch, "
                 f"viz={len(result.get('visualizations', []))}, "
-                f"insights={len(result.get('insights', []))}, "
-                f"policies={len(result.get('policies', []))}"
+                f"ins={len(result.get('insights', []))}, "
+                f"pol={len(result.get('policies', []))}"
             )
-            
             return result
-            
+
         except Exception as e:
-            logger.error(f"DS-STAR Analysis Error: {e}", exc_info=True)
-            
-            # Fallback to simple response
+            logger.error(f"DS-STAR error: {e}", exc_info=True)
             return {
-                'message': f"Maaf, terjadi kesalahan dalam analisis. Silakan coba lagi. Error: {str(e)}",
+                'message': f"Maaf, terjadi kesalahan: {str(e)}. Silakan coba lagi.",
                 'visualizations': [],
                 'insights': [],
                 'policies': [],
                 'supporting_data_count': 0
             }
-    
+
     async def get_data_context(self) -> Dict[str, Any]:
-        """
-        Get current data context from DS-STAR analyzer.
-        Useful for debugging and monitoring.
-        """
+        """Debug endpoint: get current data description."""
         try:
-            if not self._data_description:
-                self._data_description = await self.dsstar.analyzer.analyze_data_structure()
-            
+            desc = await self.dsstar.analyzer.get_data_description()
             return {
-                'collection': self._data_description.collection_name,
-                'document_count': self._data_description.document_count,
-                'provinces': self._data_description.available_provinces,
-                'sectors': self._data_description.available_sectors,
-                'statistics': self._data_description.field_statistics,
-                'summary': self._data_description.summary
+                'description_length': len(desc),
+                'description_preview': desc[:500],
+                'config': {
+                    'collection': self.dsstar.config.collection_name,
+                    'db': self.dsstar.config.db_name,
+                    'model': self.dsstar.config.model_name,
+                    'max_rounds': self.dsstar.config.max_refinement_rounds,
+                    'max_debug': self.dsstar.config.max_debug_attempts,
+                }
             }
         except Exception as e:
-            logger.error(f"Error getting data context: {e}")
             return {'error': str(e)}
-    
+
     async def refresh_data_context(self) -> bool:
-        """Force refresh of data context cache."""
+        """Force refresh cached data description."""
         try:
-            self._data_description = await self.dsstar.analyzer.analyze_data_structure(
-                force_refresh=True
-            )
+            await self.dsstar.analyzer.get_data_description(force_refresh=True)
             return True
         except Exception as e:
-            logger.error(f"Error refreshing data context: {e}")
+            logger.error(f"Refresh failed: {e}")
             return False
 
 
-# ==============================================================================
-# COMPATIBILITY LAYER
-# ==============================================================================
-
-# For backward compatibility with existing code that imports from ai_analyzer
-# These exports allow existing code to work without modification
-
-__all__ = [
-    'PolicyAIAnalyzer',
-    'KBLI_MAPPING',
-    'KBLI_SHORT_NAMES'
-]
+__all__ = ['PolicyAIAnalyzer', 'KBLI_MAPPING', 'KBLI_SHORT_NAMES']
