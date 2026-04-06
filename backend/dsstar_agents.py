@@ -129,7 +129,7 @@ class DSStarConfig:
 
     def __post_init__(self):
         if self.model_name is None:
-            self.model_name = os.environ.get('LLM_MODEL', 'gemini-2.5-pro')
+            self.model_name = os.environ.get('LLM_MODEL', 'gemini-2.5-flash')
         self.db_name = os.environ.get('DB_NAME', 'policy_db')
 
 
