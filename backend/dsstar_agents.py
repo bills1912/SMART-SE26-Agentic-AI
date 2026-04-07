@@ -143,19 +143,26 @@ class DSStarConfig:
 
 async def _call_llm(prompt: str, model_name: str, json_output: bool = False) -> str:
     """
-    Call Gemini LLM.
-    Mirrors _call_model() from the original DS-STAR implementation.
+    Call Gemini LLM — async-safe wrapper around the synchronous SDK.
 
-    model_name is accepted as a parameter but we also re-read LLM_MODEL from
-    the environment here as a safety net, so even if a stale config object
-    passes in a wrong name the env value always wins.
+    WHY sync-wrapped instead of generate_content_async():
+      generate_content_async() routes through Google AI SDK's async path
+      which targets API v1 (stable). Experimental models such as
+      gemini-2.0-flash-exp are only available on API v1beta, which is the
+      path used by the synchronous generate_content().
+      Wrapping the sync call with asyncio.to_thread() keeps us on v1beta
+      (same routing as ai_analyzer.py) while still being non-blocking.
+
+    model_name is accepted as a parameter but LLM_MODEL from the environment
+    always wins, so .env changes are picked up without a server restart.
     """
+    import asyncio
+
     api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
     if not api_key:
         raise ValueError("No GEMINI_API_KEY or GOOGLE_API_KEY found in environment")
 
-    # Always re-read from env so .env changes are picked up without restart.
-    # Falls back to the caller-supplied model_name if env is not set.
+    # Re-read from env every call — never use a cached value.
     effective_model = (
         os.environ.get('LLM_MODEL')
         or model_name
@@ -173,7 +180,12 @@ async def _call_llm(prompt: str, model_name: str, json_output: bool = False) -> 
         model = genai.GenerativeModel(effective_model)
 
     logger.info(f"[LLM] Calling model: {effective_model}")
-    response = await model.generate_content_async(prompt)
+
+    # Use asyncio.to_thread so the synchronous SDK call does not block the
+    # event loop, while staying on the v1beta API path that supports
+    # experimental models.
+    response = await asyncio.to_thread(model.generate_content, prompt)
+
     text = response.text.strip()
     logger.info(f"[LLM] Response received ({len(text)} chars)")
     return text
