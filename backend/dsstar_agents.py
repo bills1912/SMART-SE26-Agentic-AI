@@ -141,50 +141,49 @@ class DSStarConfig:
 # LLM + CODE EXECUTION UTILITIES
 # ==============================================================================
 
-async def _call_llm(prompt: str, model_name: str, json_output: bool = False) -> str:
+def _get_gemini_model(json_output: bool = False) -> genai.GenerativeModel:
     """
-    Call Gemini LLM — async-safe wrapper around the synchronous SDK.
+    Instantiate a Gemini model exactly the same way ai_analyzer.py does:
+      1. Read API key and model name fresh from os.environ every time.
+      2. Call genai.configure() with the key.
+      3. Return a GenerativeModel instance ready for .generate_content().
 
-    WHY sync-wrapped instead of generate_content_async():
-      generate_content_async() routes through Google AI SDK's async path
-      which targets API v1 (stable). Experimental models such as
-      gemini-2.0-flash-exp are only available on API v1beta, which is the
-      path used by the synchronous generate_content().
-      Wrapping the sync call with asyncio.to_thread() keeps us on v1beta
-      (same routing as ai_analyzer.py) while still being non-blocking.
-
-    model_name is accepted as a parameter but LLM_MODEL from the environment
-    always wins, so .env changes are picked up without a server restart.
+    Reading from os.environ on every call (instead of caching at import time)
+    ensures the value set by server.py's load_dotenv() is always used.
     """
-    import asyncio
-
     api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
     if not api_key:
         raise ValueError("No GEMINI_API_KEY or GOOGLE_API_KEY found in environment")
 
-    # Re-read from env every call — never use a cached value.
-    effective_model = (
-        os.environ.get('LLM_MODEL')
-        or model_name
-        or 'gemini-2.0-flash-exp'
-    )
+    model_name = os.environ.get('LLM_MODEL', 'gemini-2.0-flash-exp')
 
     genai.configure(api_key=api_key)
 
     if json_output:
-        model = genai.GenerativeModel(
-            model_name=effective_model,
+        return genai.GenerativeModel(
+            model_name=model_name,
             generation_config={"response_mime_type": "application/json"}
         )
-    else:
-        model = genai.GenerativeModel(effective_model)
+    return genai.GenerativeModel(model_name)
 
+
+async def _call_llm(prompt: str, model_name: str = None, json_output: bool = False) -> str:
+    """
+    Call Gemini using the same pattern as ai_analyzer.py:
+      - model.generate_content(prompt)  [synchronous SDK call]
+      - model_name param is ignored — always reads LLM_MODEL from os.environ
+        so the value is consistent with every other part of the application.
+
+    The synchronous call is intentional: google-generativeai's sync path
+    uses API v1beta which supports experimental models (e.g. gemini-2.0-flash-exp).
+    The async path (generate_content_async) targets API v1 stable and rejects
+    experimental model names with a 404 error.
+    """
+    model = _get_gemini_model(json_output=json_output)
+    effective_model = os.environ.get('LLM_MODEL', 'gemini-2.0-flash-exp')
     logger.info(f"[LLM] Calling model: {effective_model}")
 
-    # Use asyncio.to_thread so the synchronous SDK call does not block the
-    # event loop, while staying on the v1beta API path that supports
-    # experimental models.
-    response = await asyncio.to_thread(model.generate_content, prompt)
+    response = model.generate_content(prompt)
 
     text = response.text.strip()
     logger.info(f"[LLM] Response received ({len(text)} chars)")
