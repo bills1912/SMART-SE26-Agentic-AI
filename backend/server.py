@@ -418,6 +418,52 @@ async def get_chat_session(session_id: str, request: Request):
         logger.error(f"❌ Error fetching session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Error fetching session")
 
+class BulkDeleteRequest(BaseModel):
+    session_ids: List[str]
+
+@api_router.delete("/sessions/batch")
+async def delete_multiple_sessions(delete_request: BulkDeleteRequest, request: Request):
+    """
+    Delete multiple chat sessions at once.
+    Only deletes sessions belonging to the authenticated user.
+    """
+    try:
+        current_user = await get_current_user_from_request(request)
+        user_id = current_user.get("user_id") if current_user else None
+ 
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
+ 
+        count = await policy_db.delete_chat_sessions(delete_request.session_ids, user_id=user_id)
+        logger.info(f"✓ Bulk deleted {count} sessions for user {user_id}")
+        return {"message": f"Successfully deleted {count} sessions", "count": count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting multiple sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete sessions")
+
+@api_router.delete("/sessions/all")
+async def delete_all_sessions(request: Request):
+    """
+    Delete ALL chat sessions for the current user.
+    Only deletes sessions belonging to the authenticated user.
+    """
+    try:
+        current_user = await get_current_user_from_request(request)
+        user_id = current_user.get("user_id") if current_user else None
+ 
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
+ 
+        count = await policy_db.delete_all_chat_sessions(user_id=user_id)
+        logger.info(f"✓ Deleted all {count} sessions for user {user_id}")
+        return {"message": f"Successfully deleted {count} sessions", "count": count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting all sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete all sessions")
 
 @api_router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str, request: Request):
@@ -446,60 +492,7 @@ async def delete_session(session_id: str, request: Request):
     except Exception as e:
         logger.error(f"Error deleting session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete session")
-
-
-class BulkDeleteRequest(BaseModel):
-    session_ids: List[str]
-
-
-@api_router.delete("/sessions/batch")
-async def delete_multiple_sessions(delete_request: BulkDeleteRequest, request: Request):
-    """
-    Delete multiple chat sessions at once
-    
-    - Only deletes sessions belonging to the authenticated user
-    """
-    try:
-        current_user = await get_current_user_from_request(request)
-        user_id = current_user.get("user_id") if current_user else None
         
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
-        
-        count = await policy_db.delete_chat_sessions(delete_request.session_ids, user_id=user_id)
-        logger.info(f"✓ Bulk deleted {count} sessions for user {user_id}")
-        return {"message": f"Successfully deleted {count} sessions", "count": count}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting multiple sessions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete sessions")
-
-
-@api_router.delete("/sessions/all")
-async def delete_all_sessions(request: Request):
-    """
-    Delete ALL chat sessions for the current user
-    
-    - Only deletes sessions belonging to the authenticated user
-    """
-    try:
-        current_user = await get_current_user_from_request(request)
-        user_id = current_user.get("user_id") if current_user else None
-        
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required to delete sessions")
-        
-        count = await policy_db.delete_all_chat_sessions(user_id=user_id)
-        logger.info(f"✓ Deleted all {count} sessions for user {user_id}")
-        return {"message": f"Successfully deleted {count} sessions", "count": count}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting all sessions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete all sessions")
-
-
 # ============================================
 # REPORT ENDPOINTS - WITH USER AUTHENTICATION
 # ============================================
